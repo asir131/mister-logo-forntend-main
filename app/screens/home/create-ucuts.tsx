@@ -9,7 +9,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import React, { useEffect, useState } from 'react';
 import {
   Dimensions,
   Text,
@@ -21,6 +22,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 
 const { width } = Dimensions.get('window');
+const STORY_PREVIEW_WIDTH = width * 0.8;
+const STORY_PREVIEW_HEIGHT = STORY_PREVIEW_WIDTH * 1.77;
 
 const CreateStory = () => {
   const { data: profileData } = useGetMyProfile();
@@ -57,6 +60,22 @@ const CreateStory = () => {
   } | null>(null);
   const { mutateAsync: createUCuts, isPending } = useCreateUCuts();
 
+  const previewPlayer = useVideoPlayer(
+    selectedMedia?.mediaType === 'video' ? selectedMedia.uri : '',
+    player => {
+      player.loop = true;
+      player.muted = true;
+    }
+  );
+
+  useEffect(() => {
+    if (selectedMedia?.mediaType === 'video') {
+      previewPlayer.play();
+    } else {
+      previewPlayer.pause();
+    }
+  }, [selectedMedia?.mediaType, previewPlayer]);
+
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
@@ -71,8 +90,7 @@ const CreateStory = () => {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.All,
-      allowsEditing: true,
-      aspect: [9, 16],
+      allowsEditing: false,
       quality: 1,
     });
 
@@ -150,24 +168,22 @@ const CreateStory = () => {
             className='w-full rounded-2xl border border-black/20 dark:border-white/10 bg-[#F0F2F5] dark:bg-[#FFFFFF0D] px-4 py-3 text-black dark:text-white'
           />
           {selectedMedia ? (
-            <View className='w-full flex-1 overflow-hidden items-center justify-center'>
+            <View
+              className='overflow-hidden items-center justify-center bg-black/30 rounded-2xl'
+              style={{ width: STORY_PREVIEW_WIDTH, height: STORY_PREVIEW_HEIGHT }}
+            >
               {selectedMedia.mediaType === 'image' ? (
                 <Image
                   source={{ uri: selectedMedia.uri }}
                   style={{ width: '100%', height: '100%' }}
-                  contentFit='cover'
+                  contentFit='contain'
                 />
               ) : (
-                <View className='w-full h-full items-center justify-center bg-black/20 rounded-2xl'>
-                  <Ionicons
-                    name='videocam'
-                    size={48}
-                    color={isLight ? 'black' : 'white'}
-                  />
-                  <Text className='text-black dark:text-white mt-3'>
-                    {selectedMedia.name}
-                  </Text>
-                </View>
+                <VideoView
+                  style={{ width: '100%', height: '100%' }}
+                  player={previewPlayer}
+                  contentFit='contain'
+                />
               )}
               <TouchableOpacity
                 onPress={() => setSelectedMedia(null)}
@@ -184,7 +200,7 @@ const CreateStory = () => {
             <TouchableOpacity
               onPress={pickImage}
               className='items-center justify-center border-2 border-black/20 dark:border-white/10 border-dashed rounded-2xl bg-[#F0F2F5] dark:bg-[#FFFFFF0D]'
-              style={{ width: width * 0.8, height: width * 0.8 * 1.77 }}
+              style={{ width: STORY_PREVIEW_WIDTH, height: STORY_PREVIEW_HEIGHT }}
             >
               <View className='w-20 h-20 rounded-full bg-[#F0F2F5] dark:bg-[#FFFFFF0D] items-center justify-center mb-4'>
                 <Ionicons

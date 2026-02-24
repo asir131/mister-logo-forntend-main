@@ -166,14 +166,13 @@ const StoryItem = ({
         <VideoView
           style={{ width, height, position: 'absolute' }}
           player={player}
-          fullscreenOptions={{ enable: true }}
-          allowsPictureInPicture
+          contentFit='contain'
         />
       ) : (
         <Image
           source={{ uri: item.storyImage }}
           style={{ width, height, position: 'absolute' }}
-          contentFit='cover'
+          contentFit='contain'
         />
       )}
 
@@ -504,3 +503,5 @@ const StoryView = () => {
 };
 
 export default StoryView;
+
+
