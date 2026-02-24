@@ -34,17 +34,20 @@ const getErrorMessage = (err: unknown) => {
   }
 };
 
-const isAuthEndpoint = (url?: string) =>
-  typeof url === 'string' && /\/api\/auth(?:\/|$)/.test(url);
+const isPublicAuthEndpoint = (url?: string) =>
+  typeof url === 'string' &&
+  /\/api\/auth\/(register|verify-otp|login|refresh|firebase|forgot-password|verify-reset-otp|reset-password)(?:\/|$)/.test(
+    url
+  );
 
 api.interceptors.request.use(
   async config => {
     const token = getAuth().user?.token;
-    const authRoute = isAuthEndpoint(config.url);
+    const isPublicAuthRoute = isPublicAuthEndpoint(config.url);
 
-    if (token && !authRoute) {
+    if (token && !isPublicAuthRoute) {
       config.headers.Authorization = `Bearer ${token}`;
-    } else if (authRoute && config.headers?.Authorization) {
+    } else if (isPublicAuthRoute && config.headers?.Authorization) {
       delete config.headers.Authorization;
     }
 
@@ -78,9 +81,9 @@ api.interceptors.response.use(
     }
 
     const originalRequest = error.config || {};
-    const isAuthCall = isAuthEndpoint(originalRequest?.url);
+    const isPublicAuthCall = isPublicAuthEndpoint(originalRequest?.url);
 
-    if (status === 401 && !originalRequest._retry && !isAuthCall) {
+    if (status === 401 && !originalRequest._retry && !isPublicAuthCall) {
       const authState = getAuth();
       const refreshToken = authState.user?.refreshToken;
       const hasAccessToken = Boolean(authState.user?.token);
@@ -159,3 +162,5 @@ api.interceptors.response.use(
 );
 
 export default api;
+
+

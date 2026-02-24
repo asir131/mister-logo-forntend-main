@@ -4,6 +4,7 @@ import GradientBackground from '@/components/main/GradientBackground';
 import useAuthStore from '@/store/auth.store';
 import useThemeStore from '@/store/theme.store';
 import { useUpdateProfileLanguage } from '@/hooks/app/profile';
+import { useDeleteMyAccount } from '@/hooks/app/auth';
 import { signOutCurrentUser } from '@/services/socialAuth';
 import useLanguageStore from '@/store/language.store';
 import { useTranslateTexts } from '@/hooks/app/translate';
@@ -13,7 +14,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 function normalizeLanguage(input: any) {
@@ -112,6 +113,32 @@ const Settings = () => {
       langOptions.find(opt => opt.code === language);
     return match?.name || normalized;
   }, [language, langOptions]);
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  const { mutateAsync: deleteMyAccount, isPending: isDeletingAccount } =
+    useDeleteMyAccount();
+
+  const closeDeleteModal = () => {
+    setShowDeleteModal(false);
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      await deleteMyAccount();
+      try {
+        await signOutCurrentUser();
+      } catch (error) {
+        console.log('Sign out warning:', error);
+      }
+      clearAuth();
+      closeDeleteModal();
+      router.replace('/(auth)/login');
+    } catch {
+      // Toast is already handled in hook; prevent unhandled promise error in UI
+    }
+  };
+
   const hendleLogout = async () => {
     try {
       await signOutCurrentUser();
@@ -133,7 +160,7 @@ const Settings = () => {
           </Text>
         </View>
         <View className='border-b border-black/20 dark:border-[#FFFFFF0D] w-full mt-2'></View>
-        <ScrollView className='mx-6 mt-10' showsVerticalScrollIndicator={false}>
+        <ScrollView className='mx-6 pt-10' showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom:120}}>
           {/* account info */}
           <View className='bg-[#F0F2F5] dark:bg-[#FFFFFF0D] p-3 rounded-xl'>
             <Text className='mx-3 mt-3 text-primary dark:text-white font-roboto-semibold text-xl'>
@@ -436,7 +463,9 @@ const Settings = () => {
               />
             </TouchableOpacity>
             {/* Delete Account */}
-            <TouchableOpacity className='flex-row justify-between items-center mt-4'>
+            <TouchableOpacity
+              onPress={() => setShowDeleteModal(true)}
+              className='flex-row justify-between items-center mt-4'>
               <View className='flex-row gap-2'>
                 <Ionicons
                   name='trash-outline'
@@ -457,9 +486,61 @@ const Settings = () => {
             </TouchableOpacity>
           </View>
         </ScrollView>
+
+        <Modal
+          visible={showDeleteModal}
+          transparent
+          animationType='fade'
+          onRequestClose={closeDeleteModal}
+        >
+          <View className='flex-1 bg-black/60 justify-center px-6'>
+            <View className='bg-white dark:bg-[#0B0F15] rounded-2xl p-5 border border-black/10 dark:border-[#FFFFFF1A]'>
+              <Text className='text-lg font-roboto-semibold text-black dark:text-white'>
+                Delete Account Confirmation
+              </Text>
+              <Text className='text-sm mt-2 text-gray-600 dark:text-gray-300'>
+                This action is permanent. If you tap Delete, your account will be removed.
+              </Text>
+
+
+
+              <View className='flex-row mt-5 gap-3'>
+                <TouchableOpacity
+                  onPress={closeDeleteModal}
+                  className='flex-1 py-3 rounded-xl items-center bg-[#F0F2F5] dark:bg-[#FFFFFF0D]'
+                >
+                  <Text className='text-black dark:text-white font-roboto-medium'>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleDeleteAccount}
+                  disabled={isDeletingAccount}
+                  className={`flex-1 py-3 rounded-xl items-center ${isDeletingAccount ? 'bg-red-300' : 'bg-red-600'}`}
+                >
+                  {isDeletingAccount ? (
+                    <ActivityIndicator color='#fff' />
+                  ) : (
+                    <Text className='text-white font-roboto-medium'>Delete</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </GradientBackground>
   );
 };
 
 export default Settings;
+
+
+
+
+
+
+
+
+
+
+
+

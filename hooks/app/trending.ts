@@ -5,13 +5,16 @@ import Toast from 'react-native-toast-message';
 
 export const useGetTrendingPost = (
   selectedTab: string,
-  options?: { enabled?: boolean }
+  options?: { enabled?: boolean; search?: string }
 ) => {
   return useInfiniteQuery({
-    queryKey: ['trendingPost', selectedTab],
+    queryKey: ['trendingPost', selectedTab, options?.search || ''],
     queryFn: async ({ pageParam = 1 }) => {
       try {
         let url = `/api/trending?section=${selectedTab}`;
+        if (options?.search && options.search.trim()) {
+          url += `&q=${encodeURIComponent(options.search.trim())}`;
+        }
         if (selectedTab === 'manual') {
           url += `&manualPage=${pageParam}&manualLimit=10`;
         } else if (selectedTab === 'organic') {
@@ -54,6 +57,12 @@ export const useGetTrendingPost = (
       return page < totalPages ? page + 1 : undefined;
     },
     enabled: options?.enabled,
+    placeholderData: previousData => previousData,
+    staleTime: 10000,
     initialPageParam: 1,
   });
 };
+
+
+
+

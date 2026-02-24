@@ -48,6 +48,13 @@ const TrendingScreen = () => {
   const isFocused = useIsFocused();
   const [selectedTab, setSelectedTab] = useState<TabType>('active');
   const [usernameSearch, setUsernameSearch] = useState('');
+  const [querySearch, setQuerySearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setQuerySearch(usernameSearch.trim());
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [usernameSearch]);
   const { data: t } = useTranslateTexts({
     texts: [
       'Trending',
@@ -107,7 +114,10 @@ const TrendingScreen = () => {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useGetTrendingPost(selectedTab, { enabled: !!user?.token });
+  } = useGetTrendingPost(selectedTab, {
+    enabled: !!user?.token,
+    search: querySearch,
+  });
 
   const {
     data: activeData,
@@ -116,7 +126,11 @@ const TrendingScreen = () => {
     fetchNextPage: fetchNextActive,
     hasNextPage: hasNextActive,
     isFetchingNextPage: isFetchingNextActive,
-  } = useGetActiveUblasts({ enabled: !!user?.token && selectedTab === 'active', limit: 12 });
+  } = useGetActiveUblasts({
+    enabled: !!user?.token && selectedTab === 'active',
+    limit: 12,
+    search: querySearch,
+  });
 
   const {
     data: eligibilityData,
@@ -192,7 +206,11 @@ const TrendingScreen = () => {
     return map;
   }, [myPosts]);
 
-  const offersByUblastId = useMemo(() => {
+
+  const availableUblastsToShare = useMemo(
+    () => activeUblasts.filter((item: any) => !item?.viewerHasShared).length,
+    [activeUblasts]
+  );  const offersByUblastId = useMemo(() => {
     const map = new Map<string, any>();
     const offers = offersData?.offers || [];
     offers.forEach((offer: any) => {
@@ -242,28 +260,43 @@ const TrendingScreen = () => {
       });
   }, [trendingData]);
 
-  const normalizedUsernameSearch = usernameSearch.trim().toLowerCase();
+  const normalizedSearch = usernameSearch.trim().toLowerCase();
 
-  const isUsernameMatch = (post: any) => {
-    if (!normalizedUsernameSearch) return true;
+  const isSearchMatch = (post: any) => {
+    if (!normalizedSearch) return true;
     const username = String(post?.profile?.username || '').toLowerCase();
-    const displayName = String(post?.profile?.displayName || post?.author?.name || '').toLowerCase();
-    return username.includes(normalizedUsernameSearch) || displayName.includes(normalizedUsernameSearch);
+    const displayName = String(
+      post?.profile?.displayName || post?.author?.name || ''
+    ).toLowerCase();
+    const postText = [post?.description, post?.content, post?.text]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    return (
+      username.includes(normalizedSearch) ||
+      displayName.includes(normalizedSearch) ||
+      postText.includes(normalizedSearch)
+    );
   };
 
   const searchedFilteredPosts = useMemo(() => {
-    if (!normalizedUsernameSearch) return filteredPosts;
-    return filteredPosts.filter((post: any) => isUsernameMatch(post));
-  }, [filteredPosts, normalizedUsernameSearch]);
+    if (!normalizedSearch) return filteredPosts;
+    return filteredPosts.filter((post: any) => isSearchMatch(post));
+  }, [filteredPosts, normalizedSearch]);
 
   const searchedActiveUblasts = useMemo(() => {
-    if (!normalizedUsernameSearch) return activeUblasts;
+    if (!normalizedSearch) return activeUblasts;
     return activeUblasts.filter((item: any) => {
       const sharedPost = sharedByUblastId.get(String(item?._id));
+      const ublastTitle = String(item?.title || '').toLowerCase();
+      const ublastContent = String(item?.content || '').toLowerCase();
+
+      if (ublastTitle.includes(normalizedSearch) || ublastContent.includes(normalizedSearch)) return true;
       if (!sharedPost) return false;
-      return isUsernameMatch(sharedPost);
+      return isSearchMatch(sharedPost);
     });
-  }, [activeUblasts, sharedByUblastId, normalizedUsernameSearch]);
+  }, [activeUblasts, sharedByUblastId, normalizedSearch]);
 
   const [visibleIds, setVisibleIds] = useState<Set<string>>(new Set());
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 });
@@ -328,6 +361,13 @@ const TrendingScreen = () => {
                         ).toLocaleString()}`
                       : tx(6, 'Complete your profile to be eligible')}
               </Text>
+              {!isEligibilityLoading && isEligible ? (
+                <Text className='font-roboto-semibold text-green-600 dark:text-green-400 text-sm mt-1'>
+                  {availableUblastsToShare > 0
+                    ? `${availableUblastsToShare} new UBlasts available to share`
+                    : 'No new UBlasts available to share'}
+                </Text>
+              ) : null}
             </View>
           </View>
         </View>
@@ -373,7 +413,7 @@ const TrendingScreen = () => {
         })}
       </View>
 
-      {/* Username Search */}
+      {/* Search */}
       <View className='mx-5 mt-3'>
         <View className='flex-row items-center bg-[#F0F2F5] dark:bg-[#FFFFFF0D] border border-black/10 dark:border-[#FFFFFF1A] rounded-xl px-3'>
           <Ionicons
@@ -384,7 +424,7 @@ const TrendingScreen = () => {
           <TextInput
             value={usernameSearch}
             onChangeText={setUsernameSearch}
-            placeholder='Search by username'
+            placeholder='Search by username and post content text'
             placeholderTextColor={isLight ? '#9CA3AF' : '#6B7280'}
             autoCapitalize='none'
             autoCorrect={false}
@@ -764,6 +804,8 @@ const TrendingScreen = () => {
                   <ScrollView
                     style={{ maxHeight: 380 }}
                     showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps='always'
+            keyboardDismissMode='none'
                   >
                     <TouchableOpacity
                       onPress={() => handleShare('feed')}
@@ -864,7 +906,15 @@ const TrendingScreen = () => {
     );
   };
 
-  if (isLoading && !isRefetching) {
+  const hasTrendingPages = (data?.pages?.length ?? 0) > 0;
+  const hasActivePages = (activeData?.pages?.length ?? 0) > 0;
+  const showInitialLoader =
+    !querySearch &&
+    (selectedTab === 'active'
+      ? isActiveLoading && !hasActivePages
+      : isLoading && !hasTrendingPages);
+
+  if (showInitialLoader) {
     return (
       <GradientBackground>
         <SafeAreaView
@@ -890,6 +940,7 @@ const TrendingScreen = () => {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={{ flex: 1 }}
         >
+          {renderHeader()}
           <FlatList
             data={selectedTab === 'active' ? searchedActiveUblasts : searchedFilteredPosts}
             renderItem={({ item }) => {
@@ -937,12 +988,13 @@ const TrendingScreen = () => {
             keyExtractor={(item: any, index: number) =>
               item?._id ? String(item._id) : `trending-${index}`
             }
-            ListHeaderComponent={renderHeader()}
             contentContainerStyle={{ paddingBottom: 100 }}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps='always'
+            keyboardDismissMode='none'
             viewabilityConfig={viewabilityConfig.current}
             onViewableItemsChanged={onViewableItemsChanged.current}
-            refreshing={selectedTab === 'active' ? isActiveLoading : isRefetching}
+            refreshing={usernameSearch.trim().length > 0 ? false : selectedTab === 'active' ? isActiveLoading : isRefetching}
             onRefresh={() => {
               if (selectedTab === 'active') {
                 refetchActive();
@@ -995,6 +1047,18 @@ const TrendingScreen = () => {
 };
 
 export default TrendingScreen;
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

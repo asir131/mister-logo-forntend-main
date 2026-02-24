@@ -144,3 +144,26 @@ export const useUserForgatePasswordResetPassword = () => {
     },
   });
 };
+
+export const useDeleteMyAccount = () => {
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.delete('/api/auth/delete-account');
+      return res;
+    },
+    onSuccess: (data: any) => {
+      Toast.show({
+        type: 'success',
+        text1: 'Account Deleted',
+        text2: data?.message || 'Your account has been deleted.',
+      });
+    },
+    onError: (error: any) => {
+      Toast.show({
+        type: 'error',
+        text1: 'Delete Failed',
+        text2: getShortErrorMessage(error, 'Could not delete account.'),
+      });
+    },
+  });
+};

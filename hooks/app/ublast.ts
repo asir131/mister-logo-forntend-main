@@ -22,6 +22,8 @@ export const useGetUblastEligibility = (options?: { enabled?: boolean }) => {
       }
     },
     enabled: options?.enabled,
+    placeholderData: previousData => previousData,
+    staleTime: 10000,
   });
 };
 
@@ -128,13 +130,17 @@ export const useUpdateUBlastPost = () => {
   });
 };
 
-export const useGetActiveUblasts = (options?: { enabled?: boolean; limit?: number }) => {
+export const useGetActiveUblasts = (options?: { enabled?: boolean; limit?: number; search?: string }) => {
   return useInfiniteQuery({
-    queryKey: ['ublast-active', options?.limit ?? 12],
+    queryKey: ['ublast-active', options?.limit ?? 12, options?.search || ''],
     queryFn: async ({ pageParam = 1 }) => {
       try {
         const limit = options?.limit ?? 12;
-        const res = await api.get(`/api/ublasts/active?page=${pageParam}&limit=${limit}`);
+        let url = `/api/ublasts/active?page=${pageParam}&limit=${limit}`;
+        if (options?.search && options.search.trim()) {
+          url += `&q=${encodeURIComponent(options.search.trim())}`;
+        }
+        const res = await api.get(url);
         const data = res?.data || res;
         if (data === undefined || data === null) {
           return { ublasts: [], page: pageParam, totalPages: 1 };
@@ -160,6 +166,8 @@ export const useGetActiveUblasts = (options?: { enabled?: boolean; limit?: numbe
     },
     initialPageParam: 1,
     enabled: options?.enabled,
+    placeholderData: previousData => previousData,
+    staleTime: 10000,
   });
 };
 
@@ -217,6 +225,8 @@ export const useGetUblastOffers = (options?: {
       }
     },
     enabled: options?.enabled,
+    placeholderData: previousData => previousData,
+    staleTime: 10000,
   });
 };
 
@@ -345,3 +355,8 @@ export const useShareUblast = () => {
     },
   });
 };
+
+
+
+
+

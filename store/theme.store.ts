@@ -33,7 +33,7 @@ const syncNativewindScheme = (mode: ThemeMode) => {
 };
 
 // Ensure first render uses app default mode even before persisted state rehydrates.
-syncNativewindScheme("dark");
+syncNativewindScheme("light");
 
 type ThemePersist = (
   config: StateCreator<ThemeStore>,
@@ -43,13 +43,13 @@ type ThemePersist = (
 const useThemeStore = create<ThemeStore>()(
   (persist as ThemePersist)(
     (set, get) => ({
-      mode: "dark",
+      mode: "light",
       setMode: (mode: ThemeMode) => {
         syncNativewindScheme(mode);
         set({ mode });
       },
       toggleMode: () => {
-        const nextMode = get().mode === "dark" ? "light" : "dark";
+        const nextMode = get().mode === "light" ? "dark" : "light";
         syncNativewindScheme(nextMode);
         set({ mode: nextMode });
       },
@@ -61,7 +61,7 @@ const useThemeStore = create<ThemeStore>()(
         if (state?.mode) {
           syncNativewindScheme(state.mode);
         } else {
-          syncNativewindScheme("dark");
+          syncNativewindScheme("light");
         }
       },
     }
@@ -69,4 +69,5 @@ const useThemeStore = create<ThemeStore>()(
 );
 
 export default useThemeStore;
+
 
