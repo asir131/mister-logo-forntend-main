@@ -11,11 +11,18 @@ import {
   MaterialIcons,
 } from '@expo/vector-icons';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabLayout() {
   const { mode } = useThemeStore();
   const isLight = mode === 'light';
   const { language } = useLanguageStore();
+  const insets = useSafeAreaInsets();
+
+  const tabBottomPadding = Math.max(insets.bottom, 10);
+  const tabHeight = 56 + tabBottomPadding;
+
   const { data: t } = useTranslateTexts({
     texts: ['Home', 'Trending', 'UPost', 'UClips', 'Message', 'Profile'],
     targetLang: language,
@@ -32,9 +39,12 @@ export default function TabLayout() {
         tabBarButton: HapticTab,
         tabBarStyle: {
           backgroundColor: isLight ? '#FFFFFF' : '#000000',
-          paddingBottom: 30,
-          height: 90,
-          paddingTop: 4,
+          paddingBottom: tabBottomPadding,
+          height: tabHeight,
+          paddingTop: 6,
+        },
+        tabBarLabelStyle: {
+          marginBottom: Platform.OS === 'android' ? 2 : 0,
         },
       }}
     >
@@ -60,26 +70,6 @@ export default function TabLayout() {
           ),
         }}
       />
-      {/* <Tabs.Screen
-        name='create'
-        options={{
-          title: '',
-          tabBarIconStyle: {
-            width: 0,
-            height: 60,
-          },
-          tabBarIcon: ({ color }) => (
-            <View
-              className={`h-14 w-14 rounded-full flex-row justify-center items-center ${
-                isLight ? 'bg-[#F0F2F5]' : 'bg-[#1E293B]'
-              }`}
-            >
-              <Feather name='plus-square' size={22} color={color} />
-            </View>
-          ),
-        }}
-      /> */}
-
       <Tabs.Screen
         name='create'
         options={{
