@@ -7,12 +7,14 @@ import { connectSocket } from '@/lib/socketClient';
 import useLanguageStore from '@/store/language.store';
 import useAuthStore from '@/store/auth.store';
 import useNotificationStore from '@/store/notification.store';
+import useThemeStore from '@/store/theme.store';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
+  RefreshControl,
   ScrollView,
   Text,
   View,
@@ -118,8 +120,10 @@ const Notification = () => {
     syncNotificationsFromServer,
   } = useNotificationStore();
   const { language } = useLanguageStore();
+  const { mode } = useThemeStore();
+  const isLight = mode === 'light';
   const { user } = useAuthStore();
-  const { data: notificationData, refetch } = useGetNotifications({
+  const { data: notificationData, refetch, isRefetching } = useGetNotifications({
     limit: 100,
     enabled: !!user?.token,
   });
@@ -143,6 +147,11 @@ const Notification = () => {
   const handleMenuClose = () => {
     setActiveMenuId(null);
   };
+  const handlePullToRefresh = useCallback(() => {
+    handleMenuClose();
+    if (!user?.token) return;
+    refetch();
+  }, [refetch, user?.token]);
 
   useFocusEffect(
     useCallback(() => {
@@ -292,6 +301,13 @@ const Notification = () => {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 72, marginHorizontal: 24 }}
             onScrollBeginDrag={handleMenuClose}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefetching}
+                onRefresh={handlePullToRefresh}
+                tintColor={isLight ? '#111827' : '#FFFFFF'}
+              />
+            }
           >
             {mappedNotifications.length === 0 ? (
               <Text className='mt-6 text-center text-primary dark:text-white font-roboto-regular text-base'>
@@ -335,4 +351,5 @@ const Notification = () => {
 };
 
 export default Notification;
+
 
