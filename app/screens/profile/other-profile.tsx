@@ -1,5 +1,5 @@
 import ShadowButton from '@/components/button/ShadowButton';
-import PostCard from '@/components/card/PostCard';
+import UserAvatar from '@/components/ui/UserAvatar';
 import GradientBackground from '@/components/main/GradientBackground';
 import { useUserFollow, useUserUnFollow } from '@/hooks/app/home';
 import { useGetOtherProfile } from '@/hooks/app/profile';
@@ -160,14 +160,10 @@ const OtherProfile = () => {
             {/* profile picture */}
             <View className='flex-row gap-4 mt-4 items-center mx-6'>
               <View className='mt-2'>
-                <Image
-                  source={{
-                    uri:
-                      profile?.profileImageUrl ||
-                      'https://randomuser.me/api/portraits/men/44.jpg',
-                  }}
-                  style={{ width: 100, height: 100, borderRadius: 100 }}
-                  contentFit='cover'
+                <UserAvatar
+                  uri={profile?.profileImageUrl || null}
+                  isLoading={isLoading}
+                  size={100}
                 />
               </View>
               <View>
@@ -362,3 +358,4 @@ const OtherProfile = () => {
 };
 
 export default OtherProfile;
+

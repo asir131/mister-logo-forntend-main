@@ -1,19 +1,24 @@
 import api from '@/api/axiosInstance';
 import { getShortErrorMessage } from '@/lib/error';
+import useAuthStore from '@/store/auth.store';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Toast from 'react-native-toast-message';
 
-export const useGetMyProfile = () => {
+export const useGetMyProfile = (options?: { enabled?: boolean }) => {
+  const { user } = useAuthStore();
+
   return useQuery({
-    queryKey: ['profile'],
+    queryKey: ['profile', user?.id || 'anonymous'],
     queryFn: async () => {
       const res = await api.get(`/api/profile/me`);
       return res;
     },
+    enabled: (options?.enabled ?? true) && !!user?.token,
   });
 };
 
 export const useUpdateProfile = () => {
+  const { user } = useAuthStore();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (formData: FormData) => {
@@ -24,8 +29,26 @@ export const useUpdateProfile = () => {
       });
       return res;
     },
-    onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
+    onSuccess: async (data: any) => {
+      const nextProfile = data?.profile;
+
+      if (nextProfile) {
+        queryClient.setQueriesData({ queryKey: ['profile'] }, (prev: any) => {
+          if (prev && typeof prev === 'object') {
+            return {
+              ...prev,
+              profile: nextProfile,
+            };
+          }
+          return { profile: nextProfile };
+        });
+
+        if (user?.id) {
+          queryClient.setQueryData(['profile', user.id], { profile: nextProfile });
+        }
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ['profile'] });
       Toast.show({
         type: 'success',
         text1: 'Profile Updated',
@@ -43,6 +66,7 @@ export const useUpdateProfile = () => {
 };
 
 export const useUpdateProfileLanguage = () => {
+  const { user } = useAuthStore();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (payload: {
@@ -64,8 +88,26 @@ export const useUpdateProfileLanguage = () => {
       });
       return res;
     },
-    onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
+    onSuccess: async (data: any) => {
+      const nextProfile = data?.profile;
+
+      if (nextProfile) {
+        queryClient.setQueriesData({ queryKey: ['profile'] }, (prev: any) => {
+          if (prev && typeof prev === 'object') {
+            return {
+              ...prev,
+              profile: nextProfile,
+            };
+          }
+          return { profile: nextProfile };
+        });
+
+        if (user?.id) {
+          queryClient.setQueryData(['profile', user.id], { profile: nextProfile });
+        }
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ['profile'] });
       Toast.show({
         type: 'success',
         text1: 'Language Updated',
@@ -83,6 +125,7 @@ export const useUpdateProfileLanguage = () => {
 };
 
 export const useCompleteProfile = () => {
+  const { user } = useAuthStore();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (formData: FormData) => {
@@ -93,8 +136,26 @@ export const useCompleteProfile = () => {
       });
       return res;
     },
-    onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
+    onSuccess: async (data: any) => {
+      const nextProfile = data?.profile;
+
+      if (nextProfile) {
+        queryClient.setQueriesData({ queryKey: ['profile'] }, (prev: any) => {
+          if (prev && typeof prev === 'object') {
+            return {
+              ...prev,
+              profile: nextProfile,
+            };
+          }
+          return { profile: nextProfile };
+        });
+
+        if (user?.id) {
+          queryClient.setQueryData(['profile', user.id], { profile: nextProfile });
+        }
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ['profile'] });
       Toast.show({
         type: 'success',
         text1: 'Profile Completed',
@@ -149,3 +210,4 @@ export const useGetSuggestedArtists = (options?: {
     enabled: options?.enabled,
   });
 };
+

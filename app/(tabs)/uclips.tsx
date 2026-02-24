@@ -1,4 +1,5 @@
 import GradientBackground from '@/components/main/GradientBackground';
+import UserAvatar from '@/components/ui/UserAvatar';
 import {
   useUserCreateComment,
   useUserGetComment,
@@ -12,7 +13,6 @@ import { useGetMyProfile } from '@/hooks/app/profile';
 import useLanguageStore from '@/store/language.store';
 import useThemeStore from '@/store/theme.store';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useMemo, useState } from 'react';
 import {
@@ -194,14 +194,9 @@ const UclipItem = ({ item, isVisible }: { item: UclipPost; isVisible: boolean })
         <View className='flex-row justify-between items-end px-6 pb-12'>
           <View className='w-3/4'>
             <View className='flex-row items-center gap-3 mb-3'>
-              <Image
-                source={{
-                  uri:
-                    item.profile?.profileImageUrl ||
-                    'https://via.placeholder.com/150',
-                }}
-                style={{ width: 44, height: 44, borderRadius: 22 }}
-                contentFit='cover'
+              <UserAvatar
+                uri={item.profile?.profileImageUrl || null}
+                size={44}
               />
               <View>
                 <Text className='text-black dark:text-white font-roboto-semibold text-base'>

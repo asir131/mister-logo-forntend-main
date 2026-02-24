@@ -1,5 +1,7 @@
-import { useGetUCutsFeed } from '@/hooks/app/ucuts';
+import UserAvatar from '@/components/ui/UserAvatar';
+import { useGetMyProfile } from '@/hooks/app/profile';
 import { useTranslateTexts } from '@/hooks/app/translate';
+import { useGetUCutsFeed } from '@/hooks/app/ucuts';
 import useAuthStore from '@/store/auth.store';
 import useLanguageStore from '@/store/language.store';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -11,8 +13,9 @@ import { FlatList, Text, TouchableOpacity, View } from 'react-native';
 export interface Story {
   id: string;
   user: string;
-  avatar: string;
-  storyImage: string;
+  avatar?: string;
+  storyImage?: string;
+  isLoading?: boolean;
   isMe?: boolean;
 }
 
@@ -29,11 +32,26 @@ const StoryCard = ({
         onPress={() => router.push('/screens/home/create-ucuts')}
         className='w-28 h-40 mr-3 rounded-2xl overflow-hidden bg-[#F0F2F5] dark:bg-[#FFFFFF0D] border border-black/20 dark:border-[#FFFFFF0D]'
       >
-        <Image
-          source={story.storyImage}
-          style={{ width: '100%', height: '70%' }}
-          contentFit='cover'
-        />
+        {story.storyImage ? (
+          <Image
+            source={story.storyImage}
+            style={{ width: '100%', height: '70%' }}
+            contentFit='cover'
+          />
+        ) : (
+          <View className='w-full h-[70%] items-center justify-center bg-black/10 dark:bg-white/10'>
+            <Ionicons name='images-outline' size={24} color='#9CA3AF' />
+          </View>
+        )}
+        <View className='absolute left-2 top-2'>
+          <UserAvatar
+            uri={story.avatar || null}
+            isLoading={Boolean(story.isLoading)}
+            size={32}
+            borderWidth={2}
+            borderColor='#FFFFFF'
+          />
+        </View>
         <View className='flex-1 items-center justify-center -mt-5'>
           <View className='bg-white p-1 rounded-full border-2 border-black'>
             <Ionicons name='add' size={20} color='black' />
@@ -58,22 +76,26 @@ const StoryCard = ({
       }
       className='w-28 h-40 mr-3 rounded-2xl overflow-hidden bg-[#F0F2F5] dark:bg-[#FFFFFF0D] border border-black/20 dark:border-[#FFFFFF0D]'
     >
-      <Image
-        source={story.storyImage}
-        style={{ width: '100%', height: '100%', position: 'absolute' }}
-        contentFit='cover'
-      />
+      {story.storyImage ? (
+        <Image
+          source={story.storyImage}
+          style={{ width: '100%', height: '100%', position: 'absolute' }}
+          contentFit='cover'
+        />
+      ) : (
+        <View className='absolute inset-0 items-center justify-center bg-black/10 dark:bg-white/10'>
+          <Ionicons name='images-outline' size={24} color='#9CA3AF' />
+        </View>
+      )}
       <View className='absolute inset-0 bg-black/20 dark:bg-black/20' />
 
-      {/* Profile Avatar */}
       <View className='p-2'>
-        <View className='w-8 h-8 rounded-full border-2 border-primary overflow-hidden'>
-          <Image
-            source={story.avatar}
-            style={{ width: '100%', height: '100%' }}
-            contentFit='cover'
-          />
-        </View>
+        <UserAvatar
+          uri={story.avatar || null}
+          size={32}
+          borderWidth={2}
+          borderColor='#FFFFFF'
+        />
       </View>
 
       <Text
@@ -88,6 +110,13 @@ const StoryCard = ({
 
 const StorySection = () => {
   const { user } = useAuthStore();
+  const { data: myProfileData, isLoading: isMyProfileLoading } = useGetMyProfile({
+    enabled: !!user?.token,
+  });
+  const myProfileImageUrl =
+    (myProfileData as any)?.profile?.profileImageUrl ||
+    (myProfileData as any)?.profileImageUrl ||
+    '';
   const { language } = useLanguageStore();
   const { data: t } = useTranslateTexts({
     texts: ['Create UCuts', 'Add to UCuts', 'User'],
@@ -102,7 +131,10 @@ const StorySection = () => {
     user: tx(2, 'User'),
   };
   const { data } = useGetUCutsFeed({ limit: 20 });
-  const ucuts = data?.pages?.flatMap((page: any) => page?.ucuts || []) || [];
+  const ucuts = useMemo(
+    () => data?.pages?.flatMap((page: any) => page?.ucuts || []) || [],
+    [data]
+  );
 
   const stories: Story[] = useMemo(() => {
     const groups = new Map<
@@ -123,8 +155,7 @@ const StorySection = () => {
       const createdAt = new Date(ucut?.createdAt || 0).getTime();
       const existing = groups.get(ownerId);
       const ownerName = owner?.name || ui.user;
-      const ownerAvatar =
-        owner?.profileImageUrl || 'https://via.placeholder.com/150';
+      const ownerAvatar = owner?.profileImageUrl || '';
 
       if (!existing) {
         groups.set(ownerId, {
@@ -162,7 +193,7 @@ const StorySection = () => {
           id: group.ownerId,
           user: group.ownerName,
           avatar: group.ownerAvatar,
-          storyImage: firstSegment?.url || 'https://via.placeholder.com/150',
+          storyImage: firstSegment?.url || '',
         };
       });
 
@@ -170,17 +201,14 @@ const StorySection = () => {
       {
         id: 'add-ucuts',
         user: ui.add,
-        avatar:
-          (user as any)?.profileImageUrl ||
-          'https://via.placeholder.com/150',
-        storyImage:
-          (user as any)?.profileImageUrl ||
-          'https://via.placeholder.com/150',
+        avatar: myProfileImageUrl,
+        storyImage: myProfileImageUrl,
+        isLoading: isMyProfileLoading,
         isMe: true,
       },
       ...groupedStories,
     ];
-  }, [ucuts, ui.add, ui.user, user]);
+  }, [ucuts, ui.add, ui.user, user?.id, myProfileImageUrl, isMyProfileLoading]);
 
   return (
     <View className='mt-6 mb-2'>
@@ -199,3 +227,5 @@ const StorySection = () => {
 };
 
 export default StorySection;
+
+

@@ -1,4 +1,5 @@
 import Input from '@/components/inpute/Inpute';
+import UserAvatar from '@/components/ui/UserAvatar';
 import { useCreatePost } from '@/hooks/app/post';
 import { useGetMyProfile } from '@/hooks/app/profile';
 import { useTranslateTexts } from '@/hooks/app/translate';
@@ -39,11 +40,15 @@ const CreatePostCard = () => {
   const tx = (i: number, fallback: string) =>
     t?.translations?.[i] || fallback;
 
-  const { data: profileData } = useGetMyProfile();
+  const { data: profileData, isLoading: isProfileLoading } = useGetMyProfile();
   // @ts-ignore
-  const profileImage = profileData?.profile?.profileImageUrl;
+  const profileImage =
+    (profileData as any)?.profile?.profileImageUrl ||
+    (profileData as any)?.profileImageUrl ||
+    '';
 
   const { mutate: createPost, isPending: isPosting } = useCreatePost();
+  const isFocused = useIsFocused();
 
   const handleImagePicker = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -131,18 +136,10 @@ const CreatePostCard = () => {
         onPress={() => router.push('/(tabs)/profile')}
         className='mt-2'
       >
-        <Image
-          source={
-            profileImage
-              ? { uri: profileImage }
-              : require('@/assets/images/profile.png')
-          }
-          style={{
-            width: 30,
-            height: 30,
-            borderRadius: 15,
-          }}
-          contentFit='cover'
+        <UserAvatar
+          uri={profileImage || null}
+          isLoading={isProfileLoading}
+          size={30}
         />
       </TouchableOpacity>
       <View className=' flex-1'>
@@ -215,4 +212,4 @@ const CreatePostCard = () => {
 };
 
 export default CreatePostCard;
-  const isFocused = useIsFocused();
+

@@ -13,6 +13,7 @@ import useAuthStore from '@/store/auth.store';
 import useThemeStore from '@/store/theme.store';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
+import UserAvatar from '@/components/ui/UserAvatar';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -181,11 +182,11 @@ const StoryItem = ({
       <SafeAreaView className='flex-1'>
         <View className='flex-row items-center justify-between px-4 pt-2.5'>
           <View className='flex-row items-center flex-1'>
-            <Image
-              source={{ uri: item.avatar }}
-              style={{ width: 40, height: 40, borderRadius: 20 }}
-              contentFit='cover'
-              className='border border-white'
+            <UserAvatar
+              uri={item.avatar || null}
+              size={40}
+              borderWidth={1}
+              borderColor='white'
             />
             <View className='ml-2.5'>
               <Text className='text-white text-sm font-semibold'>
@@ -310,15 +311,9 @@ const StoryItem = ({
                         });
                       }}
                     >
-                      <Image
-                        source={{
-                          uri:
-                            c?.user?.profileImageUrl ||
-                            c?.profileImageUrl ||
-                            'https://via.placeholder.com/150',
-                        }}
-                        style={{ width: 36, height: 36, borderRadius: 18 }}
-                        contentFit='cover'
+                      <UserAvatar
+                        uri={c?.user?.profileImageUrl || c?.profileImageUrl || null}
+                        size={36}
                       />
                     </TouchableOpacity>
                     <View className='flex-1'>
@@ -362,7 +357,10 @@ const StoryView = () => {
     hasNextPage,
     isFetchingNextPage,
   } = useGetUCutsFeed({ limit: 20 });
-  const ucuts = data?.pages?.flatMap((page: any) => page?.ucuts || []) || [];
+  const ucuts = useMemo(
+    () => data?.pages?.flatMap((page: any) => page?.ucuts || []) || [],
+    [data]
+  );
   const listRef = useRef<FlatList<any>>(null);
   const didInitialScroll = useRef(false);
   const isFocused = useIsFocused();
@@ -392,8 +390,7 @@ const StoryView = () => {
       const createdAt = new Date(ucut?.createdAt || 0).getTime();
       const existing = groups.get(id);
       const ownerName = owner?.name || 'User';
-      const ownerAvatar =
-        owner?.profileImageUrl || 'https://via.placeholder.com/150';
+      const ownerAvatar = owner?.profileImageUrl || '';
 
       if (!existing) {
         groups.set(id, {
@@ -443,7 +440,7 @@ const StoryView = () => {
         }));
       });
     });
-  }, [ucuts]);
+  }, [ucuts, user?.id]);
 
   const startIndex = useMemo(() => {
     if (!ownerId) return 0;
@@ -503,5 +500,4 @@ const StoryView = () => {
 };
 
 export default StoryView;
-
 

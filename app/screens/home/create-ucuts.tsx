@@ -1,5 +1,6 @@
 import ShadowButton from '@/components/button/ShadowButton';
 import GradientBackground from '@/components/main/GradientBackground';
+import UserAvatar from '@/components/ui/UserAvatar';
 import { useGetMyProfile } from '@/hooks/app/profile';
 import { useCreateUCuts } from '@/hooks/app/ucuts';
 import { useTranslateTexts } from '@/hooks/app/translate';
@@ -26,7 +27,7 @@ const STORY_PREVIEW_WIDTH = width * 0.8;
 const STORY_PREVIEW_HEIGHT = STORY_PREVIEW_WIDTH * 1.77;
 
 const CreateStory = () => {
-  const { data: profileData } = useGetMyProfile();
+  const { data: profileData, isLoading: isProfileLoading } = useGetMyProfile();
   const profileImageUrl =
     (profileData as any)?.profile?.profileImageUrl ||
     (profileData as any)?.profileImageUrl ||
@@ -148,15 +149,13 @@ const CreateStory = () => {
           <Text className='text-black dark:text-white text-lg font-semibold'>
             {tx(0, 'Create UCuts')}
           </Text>
-          <View className='w-10 h-10 rounded-full overflow-hidden border border-black/20 dark:border-white/20'>
-            <Image
-              source={{
-                uri: profileImageUrl || 'https://via.placeholder.com/150',
-              }}
-              style={{ width: '100%', height: '100%' }}
-              contentFit='cover'
-            />
-          </View>
+          <UserAvatar
+            uri={profileImageUrl || null}
+            isLoading={isProfileLoading}
+            size={40}
+            borderWidth={1}
+            borderColor={isLight ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)'}
+          />
         </View>
 
         <View className='flex-1 items-center justify-center p-5 gap-4'>
@@ -231,3 +230,5 @@ const CreateStory = () => {
 };
 
 export default CreateStory;
+
+

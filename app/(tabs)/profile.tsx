@@ -1,7 +1,8 @@
 import ShadowButton from '@/components/button/ShadowButton';
 import PostCard from '@/components/card/PostCard';
+import UserAvatar from '@/components/ui/UserAvatar';
 import GradientBackground from '@/components/main/GradientBackground';
-import { useDeletePost, useGetMyPostsInfinite } from '@/hooks/app/post';
+import { useGetMyPostsInfinite } from '@/hooks/app/post';
 import { useGetMyProfile } from '@/hooks/app/profile';
 import { useTranslateTexts } from '@/hooks/app/translate';
 import useAuthStore from '@/store/auth.store';
@@ -80,6 +81,7 @@ const Profiles = () => {
 
   const {
     data,
+    isLoading: isProfileLoading,
     refetch: refetchProfile,
     isRefetching: isProfileRefetching,
   } = useGetMyProfile();
@@ -120,7 +122,6 @@ const Profiles = () => {
   } = useGetMyPostsInfinite({ limit: 10, enabled: selectedType === 'all' });
   const allPosts =
     myPostsData?.pages?.flatMap((page: any) => page?.posts || []) || [];
-  const { mutate: deletePost } = useDeletePost();
 
   const [showShareModal, setShowShareModal] = useState(false);
 
@@ -185,14 +186,10 @@ const Profiles = () => {
             {/* profile picture */}
             <View className='flex-row gap-4 mt-4 items-center mx-6'>
               <TouchableOpacity className='mt-2'>
-                <Image
-                  source={{
-                    uri:
-                      profile?.profileImageUrl ||
-                      'https://randomuser.me/api/portraits/men/44.jpg',
-                  }}
-                  style={{ width: 100, height: 100, borderRadius: 100 }}
-                  contentFit='cover'
+                <UserAvatar
+                  uri={profile?.profileImageUrl || null}
+                  isLoading={isProfileLoading}
+                  size={100}
                 />
               </TouchableOpacity>
               <View>
@@ -477,5 +474,4 @@ const Profiles = () => {
 };
 
 export default Profiles;
-
 

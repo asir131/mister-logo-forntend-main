@@ -14,7 +14,7 @@ import useThemeStore from '@/store/theme.store';
 import useAuthStore from '@/store/auth.store';
 import Entypo from '@expo/vector-icons/Entypo';
 import Feather from '@expo/vector-icons/Feather';
-import { Image } from 'expo-image';
+import UserAvatar from '@/components/ui/UserAvatar';
 import { useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -207,14 +207,9 @@ const ChatScreen = () => {
     return (
       <View className='flex-row gap-3 items-end mt-7 px-4'>
         <TouchableOpacity className='mt-2 relative'>
-          <Image
-            source={
-              userImage
-                ? { uri: userImage }
-                : require('@/assets/images/profile.png')
-            }
-            style={{ width: 40, height: 40, borderRadius: 100 }}
-            contentFit='cover'
+          <UserAvatar
+            uri={userImage || null}
+            size={40}
           />
           <View className='h-3 w-3 rounded-full bg-[#00B56C] absolute right-0 bottom-0' />
         </TouchableOpacity>
@@ -274,14 +269,9 @@ const ChatScreen = () => {
             <View className='flex-row items-center gap-5'>
               <BackButton />
               <TouchableOpacity className='mt-2 relative'>
-                <Image
-                  source={
-                    userImage
-                      ? { uri: userImage }
-                      : require('@/assets/images/profile.png')
-                  }
-                  style={{ width: 46, height: 46, borderRadius: 100 }}
-                  contentFit='cover'
+                <UserAvatar
+                  uri={userImage || null}
+                  size={46}
                 />
                 <View
                   className={`h-3 w-3 rounded-full absolute right-0 bottom-0 border border-white ${
@@ -404,3 +394,4 @@ const ChatScreen = () => {
 };
 
 export default ChatScreen;
+

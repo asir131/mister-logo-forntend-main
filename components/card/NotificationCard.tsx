@@ -1,5 +1,5 @@
 import { MaterialCommunityIcons, Octicons } from "@expo/vector-icons";
-import { Image } from "expo-image";
+import UserAvatar from "@/components/ui/UserAvatar";
 import { router } from "expo-router";
 import { useTranslateTexts } from "@/hooks/app/translate";
 import useLanguageStore from "@/store/language.store";
@@ -8,7 +8,7 @@ import { Text, TouchableOpacity, View } from "react-native";
 import useThemeStore from "@/store/theme.store";
 
 type NotificationCardProps = {
-  img: any;
+  img?: string | null;
   name: string;
   reson: string;
   time: string;
@@ -106,7 +106,7 @@ const NotificationCard = ({
         }}
         className="relative"
       >
-        <Image source={img} style={{ width: 40, height: 40 }} contentFit="contain" />
+        <UserAvatar uri={img || null} size={40} />
 
         {type === "like" && (
           <View className="absolute right-0 bottom-5">
@@ -215,7 +215,7 @@ const NotificationCard = ({
         >
           <TouchableOpacity
             onPress={handleMarkAsRead}
-            className="px-4 py-3 flex-row items-center border-b border-black/20 dark:border-[#FFFFFF0D] dark:border-gray-600"
+            className="px-4 py-3 flex-row items-center border-b border-black/20 dark:border-[#FFFFFF0D]"
           >
             <MaterialCommunityIcons name="check" size={16} color="#10B981" />
             <Text className="text-black dark:text-white ml-2 text-sm">{tx(0, "Mark as read")}</Text>
@@ -231,3 +231,6 @@ const NotificationCard = ({
 };
 
 export default NotificationCard;
+
+
+

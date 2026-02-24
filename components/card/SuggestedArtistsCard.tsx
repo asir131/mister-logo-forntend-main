@@ -1,7 +1,7 @@
 import { useGetSuggestedArtists } from '@/hooks/app/profile';
 import { useTranslateTexts } from '@/hooks/app/translate';
 import useLanguageStore from '@/store/language.store';
-import { Image } from 'expo-image';
+import UserAvatar from '@/components/ui/UserAvatar';
 import { router } from 'expo-router';
 import React from 'react';
 import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
@@ -64,16 +64,9 @@ const SuggestedArtistsCard = ({ className }: { className?: string }) => {
             className='items-center'
             style={{ width: 80 }}
           >
-            <Image
-              source={{
-                uri: item.profileImageUrl || 'https://via.placeholder.com/150',
-              }}
-              style={{
-                width: 60,
-                height: 60,
-                borderRadius: 100,
-              }}
-              contentFit='cover'
+            <UserAvatar
+              uri={item.profileImageUrl || null}
+              size={60}
             />
             <Text
               className='font-roboto-semibold text-sm text-primary dark:text-white mt-2 text-center'
@@ -96,3 +89,5 @@ const SuggestedArtistsCard = ({ className }: { className?: string }) => {
 };
 
 export default SuggestedArtistsCard;
+
+

@@ -279,7 +279,7 @@ const EditProfile = () => {
     try {
       const formData = new FormData();
 
-      // profileimage (optional for update)
+      // profileImage (optional for update)
       // Only append if it's a new image (local URI)
       if (profileImage && !profileImage.startsWith('http')) {
         const filename = profileImage.split('/').pop() || 'profile.jpg';
@@ -292,7 +292,7 @@ const EditProfile = () => {
               ? 'image/jpeg'
               : 'image/*';
 
-        formData.append('profileimage', {
+        formData.append('profileImage', {
           uri: profileImage,
           name: filename,
           type: mimeType,
@@ -316,7 +316,11 @@ const EditProfile = () => {
       formData.append('facebookUrl', '');
 
       updateProfile(formData, {
-        onSuccess: () => {
+        onSuccess: (data: any) => {
+          const nextProfile = data?.profile;
+          if (nextProfile?.profileImageUrl) {
+            setProfileImage(nextProfile.profileImageUrl);
+          }
           router.back();
         },
         onError: (error: any) => {
@@ -583,3 +587,4 @@ const EditProfile = () => {
 };
 
 export default EditProfile;
+

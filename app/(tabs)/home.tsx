@@ -1,6 +1,7 @@
 import OfficePostCard from '@/components/card/OfficePostCard';
 import PostCard from '@/components/card/PostCard';
 import SuggestedArtistsCard from '@/components/card/SuggestedArtistsCard';
+import UserAvatar from '@/components/ui/UserAvatar';
 import GradientBackground from '@/components/main/GradientBackground';
 import StorySection from '@/components/main/StorySection';
 import { useGetAllPost } from '@/hooks/app/home';
@@ -66,7 +67,7 @@ const Home = () => {
     refetch,
   } = useGetAllPost();
   const { user } = useAuthStore();
-  const { data: profileData } = useGetMyProfile();
+  const { data: profileData, isLoading: isProfileLoading } = useGetMyProfile({ enabled: !!user?.token });
   const profileImageUrl =
     (profileData as any)?.profile?.profileImageUrl ||
     (profileData as any)?.profileImageUrl ||
@@ -142,18 +143,10 @@ const Home = () => {
             )}
           </TouchableOpacity>
           <TouchableOpacity onPress={() => router.push('/(tabs)/profile')}>
-            <Image
-              source={
-                profileImageUrl
-                  ? { uri: profileImageUrl }
-                  : require('@/assets/images/profile.png')
-              }
-              style={{
-                width: 30,
-                height: 30,
-                borderRadius: 15,
-              }}
-              contentFit='cover'
+            <UserAvatar
+              uri={profileImageUrl || null}
+              isLoading={isProfileLoading}
+              size={30}
             />
           </TouchableOpacity>
         </View>
@@ -273,3 +266,4 @@ const Home = () => {
 };
 
 export default Home;
+

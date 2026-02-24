@@ -782,7 +782,9 @@ const pickAudio = async () => {
                       ? tx(50, 'Share UCuts')
                       : isScheduleMode
                         ? tx(41, 'USchedule')
-                        : tx(42, 'UPost')}
+                        : isUclip
+                          ? tx(17, 'UClips')
+                          : tx(42, 'UPost')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1246,6 +1248,7 @@ const pickAudio = async () => {
 };
 
 export default CreatePost;
+
 
 
 

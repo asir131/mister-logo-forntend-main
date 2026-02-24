@@ -1,4 +1,4 @@
-import { Image } from 'expo-image';
+import UserAvatar from '@/components/ui/UserAvatar';
 import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 
@@ -6,15 +6,7 @@ const MessageReceiverCard = () => {
   return (
     <View className='flex-row gap-3 items-end mt-7'>
       <TouchableOpacity className='mt-2 relative'>
-        <Image
-          source={require('@/assets/images/profile.png')}
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 100,
-          }}
-          contentFit='contain'
-        />
+        <UserAvatar size={40} />
         <View className='h-3 w-3 rounded-full bg-[#00B56C] absolute right-0 bottom-0' />
       </TouchableOpacity>
       <View className='bg-[#F0F2F5] dark:bg-[#FFFFFF0D] border-black/20 dark:border-[#FFFFFF0D] border rounded-[10px] w-[75%] py-2.5 px-3'>
@@ -31,3 +23,4 @@ const MessageReceiverCard = () => {
 };
 
 export default MessageReceiverCard;
+

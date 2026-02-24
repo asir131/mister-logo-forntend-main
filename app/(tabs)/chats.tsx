@@ -7,7 +7,7 @@ import useLanguageStore from '@/store/language.store';
 import useNotificationStore from '@/store/notification.store';
 import Feather from '@expo/vector-icons/Feather';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Image } from 'expo-image';
+import UserAvatar from '@/components/ui/UserAvatar';
 import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
@@ -71,8 +71,7 @@ const ChatsList = () => {
   //   JSON.stringify(data,null,2)
   // );
 
-  // @ts-ignore
-  const chatData = data?.chats ?? [];
+  const chatData = useMemo(() => (Array.isArray((data as any)?.chats) ? (data as any).chats : []), [data]);
 
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -220,18 +219,9 @@ const ChatsList = () => {
                         className='mt-2'
                       >
                         <View className='relative'>
-                          <Image
-                            source={
-                              chat?.profileImageUrl
-                                ? { uri: chat?.profileImageUrl }
-                                : require('@/assets/images/profile.png')
-                            }
-                            style={{
-                              width: 46,
-                              height: 46,
-                              borderRadius: 100,
-                            }}
-                            contentFit='cover'
+                          <UserAvatar
+                            uri={chat?.profileImageUrl || null}
+                            size={46}
                           />
                           <View
                             className={`h-3 w-3 rounded-full absolute right-0 bottom-0 border border-white ${
@@ -294,3 +284,4 @@ const ChatsList = () => {
 };
 
 export default ChatsList;
+

@@ -108,7 +108,6 @@ function normalizeNotificationType(item: any): NotificationVisualType {
 }
 
 const Notification = () => {
-  const img1 = require('@/assets/images/profile.png');
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const {
     notifications: localNotifications,
@@ -195,9 +194,10 @@ const Notification = () => {
     };
   }, [addNotification, refetch]);
 
-  const serverNotifications = Array.isArray(notificationData?.notifications)
-    ? notificationData.notifications
-    : [];
+  const serverNotifications = useMemo(
+    () => (Array.isArray(notificationData?.notifications) ? notificationData.notifications : []),
+    [notificationData]
+  );
 
   const sourceNotifications = useMemo(() => {
     const byId = new Map<string, any>();
@@ -224,7 +224,7 @@ const Notification = () => {
         name: item.title || 'Notification',
         reson: item.body || '',
         time: formatRelativeTime(item.createdAt),
-        img: img1,
+        img: typeof item?.data?.profileImageUrl === 'string' ? item.data.profileImageUrl : null,
         type: normalizeNotificationType(item),
         isRead: item.read,
         userId:
@@ -237,7 +237,7 @@ const Notification = () => {
           typeof item.data?.postId === 'string' ? item.data.postId : undefined,
         screen: typeof item.screen === 'string' ? item.screen : undefined,
       })),
-    [sourceNotifications, img1]
+    [sourceNotifications]
   );
 
   const handleOpenNotification = async (item: (typeof mappedNotifications)[number]) => {
@@ -335,5 +335,4 @@ const Notification = () => {
 };
 
 export default Notification;
-
 
