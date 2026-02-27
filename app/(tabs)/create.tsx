@@ -626,7 +626,7 @@ const pickVideo = async () => {
     const pickedSize = picked.fileSize ?? null;
     const previewUri = await resolveVideoPreviewUri(rawUri, pickedName);
 
-    setVideo(previewUri);
+    setVideo(rawUri);
     setVideoPlayerUri(previewUri);
     setVideoSize(pickedSize);
     setVideoName(pickedName);
@@ -984,10 +984,10 @@ const pickAudio = async () => {
                       cachePolicy='none'
                     />
                   </View>
-                ) : video || audio ? (
+                ) : (videoPlayerUri || video) || audio ? (
                   <MediaPreview
                     photo={photo}
-                    video={video}
+                    video={videoPlayerUri || video}
                     audio={audio}
                   />
                 ) : (
@@ -1272,6 +1272,7 @@ const pickAudio = async () => {
 };
 
 export default CreatePost;
+
 
 
 

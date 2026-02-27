@@ -1,16 +1,17 @@
 import Feather from '@expo/vector-icons/Feather';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useIsFocused } from '@react-navigation/native';
 import { useAudioPlayer } from 'expo-audio';
+import { ResizeMode, Video, type AVPlaybackStatus } from 'expo-av';
 import { Image } from 'expo-image';
-import { useVideoPlayer, VideoView } from 'expo-video';
 import React from 'react';
 import {
   ActivityIndicator,
+  StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useIsFocused } from '@react-navigation/native';
 
 interface MediaPreviewProps {
   photo: string | null;
@@ -21,51 +22,59 @@ interface MediaPreviewProps {
 const MediaPreview: React.FC<MediaPreviewProps> = ({ photo, video, audio }) => {
   const isFocused = useIsFocused();
   const audioPlayer = useAudioPlayer(audio || '');
+  const videoRef = React.useRef<Video | null>(null);
+
   const [isVideoReady, setIsVideoReady] = React.useState(false);
   const [showSlowVideoHint, setShowSlowVideoHint] = React.useState(false);
   const [videoError, setVideoError] = React.useState<string | null>(null);
+  const [videoRenderKey, setVideoRenderKey] = React.useState(0);
+  const [isVideoPlaying, setIsVideoPlaying] = React.useState(true);
+  const [isVideoMuted, setIsVideoMuted] = React.useState(true);
 
-  const videoUrl = video || '';
-  const videoPlayer = useVideoPlayer(videoUrl, player => {
-    player.loop = true;
-    player.muted = false;
-  });
+  const videoUrl = (video || '').trim();
 
   React.useEffect(() => {
-    if (!video) return;
+    if (!videoUrl) return;
     setIsVideoReady(false);
     setShowSlowVideoHint(false);
     setVideoError(null);
-  }, [video]);
+    setIsVideoPlaying(true);
+    setIsVideoMuted(true);
+    setVideoRenderKey(prev => prev + 1);
+  }, [videoUrl]);
 
   React.useEffect(() => {
-    if (!video) return;
-
-    const controlPlayback = async () => {
-      try {
-        if (isFocused) {
-          await videoPlayer.play();
-        } else {
-          videoPlayer.pause();
-        }
-      } catch {
-        setVideoError('Unable to preview this video on this device.');
-        setIsVideoReady(false);
-      }
-    };
-
-    controlPlayback();
-  }, [isFocused, video, videoPlayer]);
-
-  React.useEffect(() => {
-    if (!video || isVideoReady) return;
+    if (!videoUrl || isVideoReady) return;
 
     const timer = setTimeout(() => {
       setShowSlowVideoHint(true);
     }, 4000);
 
     return () => clearTimeout(timer);
-  }, [video, isVideoReady]);
+  }, [videoUrl, isVideoReady, videoRenderKey]);
+
+  React.useEffect(() => {
+    if (!videoUrl) return;
+
+    const syncFocusPlayback = async () => {
+      if (!videoRef.current) return;
+
+      try {
+        if (!isFocused) {
+          await videoRef.current.pauseAsync();
+          return;
+        }
+
+        if (isVideoPlaying) {
+          await videoRef.current.playAsync();
+        }
+      } catch {
+        // ignore transient state errors
+      }
+    };
+
+    syncFocusPlayback();
+  }, [isFocused, isVideoPlaying, videoUrl]);
 
   const toggleAudioPlayback = () => {
     if (audioPlayer.playing) {
@@ -75,18 +84,49 @@ const MediaPreview: React.FC<MediaPreviewProps> = ({ photo, video, audio }) => {
     }
   };
 
-  const handleRetry = async () => {
+  const toggleVideoPlayback = async () => {
+    if (!videoRef.current) return;
+
+    try {
+      if (isVideoPlaying) {
+        await videoRef.current.pauseAsync();
+        setIsVideoPlaying(false);
+      } else {
+        await videoRef.current.playAsync();
+        setIsVideoPlaying(true);
+      }
+    } catch {
+      setVideoError('Unable to control video playback on this device.');
+    }
+  };
+
+  const toggleVideoMute = async () => {
+    if (!videoRef.current) return;
+
+    const next = !isVideoMuted;
+    setIsVideoMuted(next);
+
+    try {
+      await videoRef.current.setIsMutedAsync(next);
+    } catch {
+      setVideoError('Unable to control video audio on this device.');
+    }
+  };
+
+  const handleRetry = () => {
+    if (!videoUrl) return;
+
     setIsVideoReady(false);
     setShowSlowVideoHint(false);
     setVideoError(null);
+    setIsVideoPlaying(true);
+    setIsVideoMuted(true);
+    setVideoRenderKey(prev => prev + 1);
+  };
 
-    try {
-      videoPlayer.pause();
-      await new Promise(resolve => setTimeout(resolve, 150));
-      await videoPlayer.play();
-    } catch {
-      setVideoError('Unable to preview this video on this device.');
-    }
+  const handleVideoStatus = (status: AVPlaybackStatus) => {
+    if (!status.isLoaded) return;
+    setIsVideoPlaying(status.isPlaying);
   };
 
   const formatTime = (seconds: number) => {
@@ -118,21 +158,58 @@ const MediaPreview: React.FC<MediaPreviewProps> = ({ photo, video, audio }) => {
         />
       )}
 
-      {video && (
+      {videoUrl && (
         <>
-          <VideoView
-            key={`video-${video.slice(0, 100)}`}
-            className='absolute inset-0 w-full h-full'
-            player={videoPlayer}
-            nativeControls={false}
-            contentFit='contain'
-            allowsPictureInPicture={false}
-            onFirstFrameRender={() => {
+          <Video
+            ref={ref => {
+              videoRef.current = ref;
+            }}
+            key={`video-${videoRenderKey}-${videoUrl.slice(0, 100)}`}
+            source={{ uri: videoUrl }}
+            style={StyleSheet.absoluteFillObject}
+            useNativeControls={false}
+            resizeMode={ResizeMode.CONTAIN}
+            isLooping
+            isMuted={isVideoMuted}
+            shouldPlay={isFocused && isVideoPlaying}
+            onPlaybackStatusUpdate={handleVideoStatus}
+            onReadyForDisplay={() => {
               setIsVideoReady(true);
               setShowSlowVideoHint(false);
               setVideoError(null);
             }}
+            onError={() => {
+              setVideoError('Unable to preview this video on this device.');
+              setIsVideoReady(false);
+            }}
           />
+
+          {isVideoReady && !videoError && (
+            <View className='absolute bottom-3 right-3 flex-row gap-2'>
+              <TouchableOpacity
+                onPress={toggleVideoPlayback}
+                className='w-10 h-10 rounded-full bg-black/60 items-center justify-center'
+              >
+                <Ionicons
+                  name={isVideoPlaying ? 'pause' : 'play'}
+                  size={18}
+                  color='white'
+                  style={{ marginLeft: isVideoPlaying ? 0 : 2 }}
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={toggleVideoMute}
+                className='w-10 h-10 rounded-full bg-black/60 items-center justify-center'
+              >
+                <Ionicons
+                  name={isVideoMuted ? 'volume-mute' : 'volume-high'}
+                  size={18}
+                  color='white'
+                />
+              </TouchableOpacity>
+            </View>
+          )}
 
           {!isVideoReady && (
             <View className='absolute inset-0 bg-black/80 items-center justify-center px-4'>
@@ -155,7 +232,7 @@ const MediaPreview: React.FC<MediaPreviewProps> = ({ photo, video, audio }) => {
                 )}
                 {showSlowVideoHint && !videoError && (
                   <Text className='text-white/70 text-center text-xs px-6'>
-                    This video format/codec may not be supported on this device.
+                    This video format/codec may not be supported. Try MP4 (H.264/AAC).
                   </Text>
                 )}
               </View>
