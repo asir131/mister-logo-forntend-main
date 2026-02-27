@@ -144,3 +144,39 @@ export const useUnblockUser = () => {
     },
   });
 };
+
+export const useGetSharedChatLocations = () => {
+  return useQuery({
+    queryKey: ['chat-location-shared'],
+    queryFn: async () => {
+      const res = await api.get('/api/chats/locations/shared');
+      return res;
+    },
+    refetchInterval: 30000,
+  });
+};
+
+export const useUpdateMyChatLocationShare = () => {
+  const queryClientInstance = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: {
+      isShared: boolean;
+      latitude?: number | null;
+      longitude?: number | null;
+    }) => {
+      const res = await api.post('/api/chats/locations/share', payload);
+      return res;
+    },
+    onSuccess: () => {
+      queryClientInstance.invalidateQueries({ queryKey: ['chat-location-shared'] });
+    },
+    onError: (error: any) => {
+      Toast.show({
+        type: 'error',
+        text1: 'Location Update Failed',
+        text2: getShortErrorMessage(error, 'Could not update location sharing.'),
+      });
+    },
+  });
+};

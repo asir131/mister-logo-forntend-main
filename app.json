@@ -76,6 +76,12 @@
       "expo-video",
       "expo-audio",
       "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow UNAP to access your location for shared map in messages."
+        }
+      ],
       "expo-asset",
       "@react-native-community/datetimepicker",
       "@react-native-firebase/app",
@@ -88,3 +94,5 @@
     }
   }
 }
+
+

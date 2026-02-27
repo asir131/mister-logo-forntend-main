@@ -10,6 +10,7 @@ import {
   observeAuthState,
   signInWithFacebook,
   signInWithGoogle,
+  signInWithInstagram,
 } from '@/services/socialAuth';
 import useAuthStore from '@/store/auth.store';
 import useLanguageStore from '@/store/language.store';
@@ -31,7 +32,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 
 const Login = () => {
-  type ProviderKey = 'google' | 'facebook';
+  type ProviderKey = 'google' | 'facebook' | 'instagram';
   const [rememberMe, setRememberMe] = useState(false);
   const [socialLoading, setSocialLoading] = useState<ProviderKey | null>(null);
   const { mutate } = useUserLogin();
@@ -134,6 +135,7 @@ const Login = () => {
   const loginActions: Record<ProviderKey, () => Promise<unknown>> = {
     google: signInWithGoogle,
     facebook: signInWithFacebook,
+    instagram: signInWithInstagram,
   };
 
   useEffect(() => {
@@ -174,6 +176,27 @@ const Login = () => {
     try {
       const result: any = await loginActions[provider]();
       logPretty('[Login][social] raw result =>', result);
+
+      if (result?.authUser?.token) {
+        const authUser = result.authUser;
+        const isFirstLogin = Boolean(result?.isFirstLogin);
+        const needsProfileCompletion = Boolean(result?.needsProfileCompletion);
+        logPretty('[Login][social][backend] =>', authUser);
+        setUser(authUser as any);
+
+        Toast.show({
+          type: 'success',
+          text1: 'Login Successful',
+          text2: `Signed in with ${provider === 'google' ? 'Google' : 'Facebook'}.`,
+        });
+        if (isFirstLogin || needsProfileCompletion) {
+          router.replace('/screens/profile/complete-profile');
+        } else {
+          router.replace('/(tabs)/trending');
+        }
+        return;
+      }
+
       const firebaseUser = result?.user;
       if (!firebaseUser) throw new Error('Social login failed.');
 
@@ -389,7 +412,7 @@ const Login = () => {
               <Text className='text-secondary dark:text-white/80 text-center font-roboto-regular'>
                 {tx(10, 'Or continue with')}
               </Text>
-              <View className='mt-6 flex-row justify-between items-center gap-6'>
+              <View className='mt-6 flex-row justify-between items-center gap-4'>
                 <TouchableOpacity
                   onPress={() => handleSocialLogin('google')}
                   disabled={!!socialLoading}
@@ -408,12 +431,19 @@ const Login = () => {
                 >
                   <Feather name='facebook' size={24} color={isLight ? '#1877F2' : '#FFFFFF'} />
                 </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleSocialLogin('instagram')}
+                  disabled={!!socialLoading}
+                  className='border border-black/20 dark:border-[#FFFFFF0D] rounded-xl flex-1 p-3 bg-transparent items-center'
+                >
+                  <Feather name='instagram' size={24} color={isLight ? '#E1306C' : '#FFFFFF'} />
+                </TouchableOpacity>
               </View>
               {socialLoading && (
                 <View className='mt-3 flex-row items-center justify-center gap-2'>
                   <ActivityIndicator size='small' color={isLight ? '#000000' : '#ffffff'} />
                   <Text className='text-secondary dark:text-white/80 text-xs'>
-                    Opening {socialLoading === 'google' ? 'Google' : 'Facebook'}...
+                    Opening {socialLoading === 'google' ? 'Google' : socialLoading === 'facebook' ? 'Facebook' : 'Instagram'}...
                   </Text>
                 </View>
               )}
@@ -427,4 +457,7 @@ const Login = () => {
 };
 
 export default Login;
+
+
+
 

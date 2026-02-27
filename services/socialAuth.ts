@@ -1,8 +1,12 @@
+import { SOCIAL_AUTH_BASE_URL } from '@/api/axiosInstance';
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import { AccessToken, LoginManager } from 'react-native-fbsdk-next';
 import { NativeModules, Platform } from 'react-native';
 
 type AuthChangeHandler = (user: any | null) => void;
 type OAuthProviderId = 'google.com' | 'twitter.com';
+type BackendOAuthProvider = 'facebook' | 'instagram';
 
 type FirebaseAuthModules = {
   authInstance: any;
@@ -12,6 +16,19 @@ type FirebaseAuthModules = {
   signInWithCredential?: (auth: any, credential: any) => Promise<any>;
   FacebookAuthProvider?: any;
   signOut: (auth: any) => Promise<void>;
+};
+
+export type BackendSocialAuthResult = {
+  authUser: {
+    id: string;
+    name: string;
+    email: string;
+    phoneNumber: string;
+    token: string;
+    refreshToken: string | null;
+  };
+  isFirstLogin: boolean;
+  needsProfileCompletion: boolean;
 };
 
 function getFirebaseAuthModules(): FirebaseAuthModules | null {
@@ -56,6 +73,63 @@ function buildProvider(modules: FirebaseAuthModules, providerId: OAuthProviderId
   return provider;
 }
 
+function readSingleParam(value: unknown): string {
+  if (Array.isArray(value)) {
+    return String(value[0] || '');
+  }
+  return String(value || '');
+}
+
+function readBoolParam(value: unknown): boolean {
+  const normalized = readSingleParam(value).trim().toLowerCase();
+  return normalized === 'true' || normalized === '1' || normalized === 'yes';
+}
+
+async function signInWithBackendOAuth(
+  provider: BackendOAuthProvider,
+): Promise<BackendSocialAuthResult> {
+  const appRedirectUri = Linking.createURL('auth/social');
+  const authUrl =
+    `${SOCIAL_AUTH_BASE_URL}/api/auth/${provider}` +
+    `?clientRedirect=${encodeURIComponent(appRedirectUri)}`;
+
+  const result = await WebBrowser.openAuthSessionAsync(authUrl, appRedirectUri);
+
+  if (result.type !== 'success' || !result.url) {
+    throw new Error(`${provider} login cancelled.`);
+  }
+
+  const parsed = Linking.parse(result.url);
+  const params = parsed?.queryParams || {};
+  const status = readSingleParam(params.status);
+
+  if (status !== 'success') {
+    const errorMessage = readSingleParam(params.error);
+    throw new Error(
+      errorMessage ||
+        `${provider.charAt(0).toUpperCase() + provider.slice(1)} login failed.`
+    );
+  }
+
+  const token = readSingleParam(params.token);
+  if (!token) {
+    throw new Error(`Missing token from ${provider} login response.`);
+  }
+
+  return {
+    authUser: {
+      id: readSingleParam(params.id),
+      name: readSingleParam(params.name) || 'User',
+      email: readSingleParam(params.email),
+      phoneNumber: readSingleParam(params.phoneNumber),
+      token,
+      refreshToken: readSingleParam(params.refreshToken) || null,
+    },
+    isFirstLogin: readBoolParam(params.isFirstLogin),
+    needsProfileCompletion: readBoolParam(params.needsProfileCompletion),
+  };
+}
+
 async function signInWithOAuthProvider(providerId: OAuthProviderId) {
   const modules = getFirebaseAuthModules();
   if (!modules) {
@@ -97,6 +171,10 @@ export async function signInWithGoogle() {
 }
 
 export async function signInWithFacebook() {
+  if (Platform.OS === 'android') {
+    return signInWithBackendOAuth('facebook');
+  }
+
   const modules = getFirebaseAuthModules();
   if (!modules) {
     throw new Error(getUnavailableMessage());
@@ -134,3 +212,9 @@ export async function signInWithFacebook() {
 export async function signInWithTwitter() {
   return signInWithOAuthProvider('twitter.com');
 }
+
+
+export async function signInWithInstagram() {
+  return signInWithBackendOAuth('instagram');
+}
+

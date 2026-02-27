@@ -24,6 +24,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import SimpleLineIcons from '@expo/vector-icons/SimpleLineIcons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -572,57 +573,72 @@ const CreatePost = () => {
 
 // CreatePost.tsx - pickVideo function with proper cleanup
 
-  const pickVideo = async () => {
+const resolveVideoPreviewUri = async (uri: string, name?: string | null) => {
+  if (!uri) return uri;
+
+  // On Android, ImagePicker can return a content:// URI that may fail in VideoView.
+  // Copying to app cache provides a stable file:// URI for preview and upload.
+  if (Platform.OS === 'android' && uri.startsWith('content://')) {
     try {
-      // Reset previous media first so VideoView remounts cleanly.
-      setVideo(null);
-      setVideoPlayerUri(null);
-      setVideoSize(null);
-      setVideoName(null);
-      setPhoto(null);
-      setAudio(null);
-
-      await new Promise(resolve => setTimeout(resolve, 80));
-
-      let pickedUri: string | null = null;
-      let pickedSize: number | null = null;
-      let pickedName: string | null = null;
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['videos'],
-        quality: 1,
-      });
-
-      if (!result.canceled) {
-        const picked = result.assets[0];
-        pickedUri = picked.uri;
-        pickedSize = picked.fileSize ?? null;
-        pickedName = picked.fileName ?? null;
-      } else {
-        const fallback = await DocumentPicker.getDocumentAsync({
-          type: 'video/*',
-          copyToCacheDirectory: true,
-        });
-
-        if (fallback.assets && fallback.assets.length > 0) {
-          const picked = fallback.assets[0];
-          pickedUri = picked.uri;
-          pickedSize = (picked as any).size ?? null;
-          pickedName = (picked as any).name ?? null;
-        }
-      }
-
-      if (!pickedUri) return;
-
-      setVideo(pickedUri);
-      setVideoSize(pickedSize);
-      setVideoName(pickedName);
-      setVideoPlayerUri(pickedUri);
-    } catch (error) {
-      console.error('Error picking video:', error);
+      const rawExt = (name?.split('.').pop() || 'mp4').toLowerCase();
+      const ext = /^[a-z0-9]+$/.test(rawExt) ? rawExt : 'mp4';
+      const targetPath = `${FileSystem.cacheDirectory}picked-video-${Date.now()}.${ext}`;
+      await FileSystem.copyAsync({ from: uri, to: targetPath });
+      return targetPath;
+    } catch {
+      return uri;
     }
-  };
+  }
 
+  return uri;
+};
+
+const pickVideo = async () => {
+  try {
+    setVideo(null);
+    setVideoPlayerUri(null);
+    setVideoSize(null);
+    setVideoName(null);
+    setPhoto(null);
+    setAudio(null);
+
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    const pickerOptions: ImagePicker.ImagePickerOptions = {
+      mediaTypes: ['videos'],
+      quality: 1,
+      allowsEditing: false,
+    };
+
+    if (Platform.OS === 'ios' && (ImagePicker as any).VideoExportPreset) {
+      (pickerOptions as any).videoExportPreset =
+        (ImagePicker as any).VideoExportPreset.MediumQuality ||
+        (ImagePicker as any).VideoExportPreset.Passthrough;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync(pickerOptions);
+
+    if (result.canceled) return;
+
+    const picked = result.assets[0];
+    const rawUri = picked.uri;
+    const pickedName = picked.fileName ?? null;
+    const pickedSize = picked.fileSize ?? null;
+    const previewUri = await resolveVideoPreviewUri(rawUri, pickedName);
+
+    setVideo(previewUri);
+    setVideoPlayerUri(previewUri);
+    setVideoSize(pickedSize);
+    setVideoName(pickedName);
+  } catch (error) {
+    console.error('[pickVideo] Error:', error);
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: 'Failed to select video. Please try another video file.',
+    });
+  }
+};
 // Also update pickPhoto to clear video
 const pickPhoto = async () => {
   if (isUclip) {
@@ -958,21 +974,29 @@ const pickAudio = async () => {
                 )}
               </View>
               <View className='px-6 pt-4'>
+                {/* Always use MediaPreview for video and audio, photo has separate preview */}
                 {photo ? (
                   <View className='w-full h-[300px] justify-center items-center bg-black/10 dark:bg-[#FFFFFF0D] rounded-2xl mb-4 overflow-hidden relative'>
                     <Image
                       source={{ uri: photo }}
-                      style={{ width: '100%', height: '100%' }}
+                      className='w-full h-full'
                       contentFit='cover'
                       cachePolicy='none'
                     />
                   </View>
-                ) : (
+                ) : video || audio ? (
                   <MediaPreview
                     photo={photo}
                     video={video}
                     audio={audio}
                   />
+                ) : (
+                  <View className='w-full h-[100px] justify-center items-center bg-black/10 dark:bg-[#FFFFFF0D] rounded-2xl mb-4 border border-dashed border-black/20 dark:border-[#FFFFFF0D]'>
+                    <Feather name='image' size={40} color='#666' style={{ opacity: 0.5 }} />
+                    <Text className='text-gray-400 text-center mt-4 font-roboto-regular'>
+                      Select media to preview
+                    </Text>
+                  </View>
                 )}
               </View>
 
@@ -1248,6 +1272,10 @@ const pickAudio = async () => {
 };
 
 export default CreatePost;
+
+
+
+
 
 
 

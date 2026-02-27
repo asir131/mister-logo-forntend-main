@@ -418,6 +418,7 @@ const RootLayout = () => {
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name='splash' options={{ headerShown: false }} />
           <Stack.Screen name='(auth)' />
+          <Stack.Screen name='auth/social' />
           <Stack.Screen name='(tabs)' />
         </Stack>
       </QueryClientProvider>
@@ -431,6 +432,7 @@ const RootLayout = () => {
 };
 
 export default RootLayout;
+
 
 
 
