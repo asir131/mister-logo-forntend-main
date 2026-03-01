@@ -15,6 +15,7 @@ import {
   useUnsavePost,
 } from '@/hooks/app/post';
 import { useCreateUCuts } from '@/hooks/app/ucuts';
+import api, { SOCIAL_AUTH_BASE_URL } from '@/api/axiosInstance';
 import { useTranslateTexts } from '@/hooks/app/translate';
 import { useGetMyProfile } from '@/hooks/app/profile';
 import useLanguageStore from '@/store/language.store';
@@ -22,6 +23,10 @@ import useThemeStore from '@/store/theme.store';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Image } from 'expo-image';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import * as ExpoLinking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import { router } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useEffect, useState } from 'react';
@@ -298,11 +303,18 @@ const PostCard = ({
     setShowShareModal(true);
   };
 
+  const buildPublicShareUrl = () => {
+    if (!post?._id) return '';
+    const base = SOCIAL_AUTH_BASE_URL?.replace(/\/$/, '') || '';
+    return base ? `${base}/share/${post._id}` : '';
+  };
+
   const buildSharePayload = () => {
     const description = post?.description?.trim() || '';
     const mediaUrl = post?.mediaUrl?.trim() || '';
-    const message = [description, mediaUrl].filter(Boolean).join('\n');
-    return { description, mediaUrl, message };
+    const shareUrl = buildPublicShareUrl();
+    const message = [description, shareUrl || mediaUrl].filter(Boolean).join('\n');
+    return { description, mediaUrl, shareUrl, message };
   };
 
   const openFacebookShare = async () => {
@@ -357,6 +369,179 @@ const PostCard = ({
       }
 
       await Share.share({ message, url: mediaUrl || undefined });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const openInstagramShare = async () => {
+    const { mediaUrl, message } = buildSharePayload();
+
+    try {
+      if (mediaUrl && /^https?:\/\//i.test(mediaUrl)) {
+        const isShareAvailable = await Sharing.isAvailableAsync();
+        if (isShareAvailable) {
+          const ext = post?.mediaType === 'video' ? 'mp4' : 'jpg';
+          const mimeType = post?.mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
+          const localFile = `${FileSystem.cacheDirectory}instagram-share-${post?._id || Date.now()}.${ext}`;
+
+          await FileSystem.downloadAsync(mediaUrl, localFile);
+
+          await Sharing.shareAsync(localFile, {
+            dialogTitle: 'Share to Instagram',
+            mimeType,
+            UTI: post?.mediaType === 'video' ? 'public.movie' : 'public.image',
+          });
+          return true;
+        }
+      }
+
+      const canOpenInstagram = await Linking.canOpenURL('instagram://app');
+      if (canOpenInstagram) {
+        await Linking.openURL('instagram://camera');
+        return true;
+      }
+
+      await Share.share({ message, url: mediaUrl || undefined });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const openTwitterShare = async () => {
+    const { description, mediaUrl, shareUrl, message } = buildSharePayload();
+
+    try {
+      const tweetText = description || message || '';
+      const targetUrl = shareUrl || mediaUrl;
+      const canOpenTwitterApp =
+        (await Linking.canOpenURL('twitter://')) ||
+        (await Linking.canOpenURL('x://'));
+
+      if (canOpenTwitterApp) {
+        const appMessage = [tweetText, targetUrl].filter(Boolean).join(' ');
+        const appUrl = `twitter://post?message=${encodeURIComponent(appMessage)}`;
+        await Linking.openURL(appUrl);
+        return true;
+      }
+
+      const baseUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText
+      )}`;
+      const intentUrl = targetUrl
+        ? `${baseUrl}&url=${encodeURIComponent(targetUrl)}`
+        : baseUrl;
+      await Linking.openURL(intentUrl);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const openTikTokShare = async () => {
+    const { mediaUrl, message } = buildSharePayload();
+
+    try {
+      if (!mediaUrl || !/^https?:\/\//i.test(mediaUrl)) {
+        return false;
+      }
+
+      const isShareAvailable = await Sharing.isAvailableAsync();
+      if (!isShareAvailable) {
+        return false;
+      }
+
+      const ext = post?.mediaType === 'video' ? 'mp4' : 'jpg';
+      const mimeType = post?.mediaType === 'video' ? 'video/mp4' : 'image/jpeg';
+      const localFile = `${FileSystem.cacheDirectory}tiktok-share-${post?._id || Date.now()}.${ext}`;
+
+      await FileSystem.downloadAsync(mediaUrl, localFile);
+
+      await Sharing.shareAsync(localFile, {
+        dialogTitle: 'Share to TikTok',
+        mimeType,
+      });
+
+      return true;
+    } catch {
+      try {
+        const schemes = ['snssdk1233://', 'snssdk1180://', 'tiktok://', 'musically://'];
+        for (const scheme of schemes) {
+          try {
+            await Linking.openURL(scheme);
+            return true;
+          } catch {
+            // try next scheme
+          }
+        }
+      } catch {
+        // no-op
+      }
+
+      try {
+        await Share.share({ message, url: mediaUrl || undefined });
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  };
+  const openYouTubeShare = async () => {
+    if (!post?._id) return false;
+
+    const connectRedirect = ExpoLinking.createURL('auth/youtube');
+
+    const tryUpload = async () => {
+      const result = await api.post('/api/youtube/share', { postId: post._id });
+      return result;
+    };
+
+    try {
+      const result = await tryUpload();
+      if (result?.url) {
+        Toast.show({
+          type: 'success',
+          text1: 'YouTube Upload Complete',
+          text2: 'Your video was uploaded successfully.',
+        });
+      }
+      return true;
+    } catch (error: any) {
+      const status = Number(error?.response?.status || 0);
+      const code = String(error?.response?.data?.code || '');
+      const needsConnect = status === 428 || code === 'YOUTUBE_AUTH_REQUIRED';
+
+      if (!needsConnect) {
+        return false;
+      }
+    }
+
+    try {
+      const authRes = await api.get(
+        '/api/youtube/connect-url?clientRedirect=' + encodeURIComponent(connectRedirect)
+      );
+      const authUrl = String(authRes?.url || '');
+      if (!authUrl) return false;
+
+      const authResult = await WebBrowser.openAuthSessionAsync(authUrl, connectRedirect);
+      if (authResult.type !== 'success' || !authResult.url) {
+        return false;
+      }
+
+      const parsed = ExpoLinking.parse(authResult.url);
+      const status = String(parsed?.queryParams?.status || '');
+      if (status !== 'success') {
+        return false;
+      }
+
+      const uploaded = await tryUpload();
+      if (uploaded?.url) {
+        Toast.show({
+          type: 'success',
+          text1: 'YouTube Upload Complete',
+          text2: 'Your video was uploaded successfully.',
+        });
+      }
       return true;
     } catch {
       return false;
@@ -471,6 +656,33 @@ const PostCard = ({
             text2: 'Could not open Instagram story share.',
           });
         }
+      } else if (target === 'twitter') {
+        const opened = await openTwitterShare();
+        if (!opened) {
+          Toast.show({
+            type: 'error',
+            text1: 'Twitter share failed',
+            text2: 'Could not open Twitter share.',
+          });
+        }
+      } else if (target === 'instagram') {
+        const opened = await openInstagramShare();
+        if (!opened) {
+          Toast.show({
+            type: 'error',
+            text1: 'Instagram share failed',
+            text2: 'Could not open Instagram share.',
+          });
+        }
+      } else if (target === 'tiktok') {
+        const opened = await openTikTokShare();
+        if (!opened) {
+          Toast.show({
+            type: 'error',
+            text1: 'TikTok share failed',
+            text2: 'Could not open TikTok share.',
+          });
+        }
       } else if (target === 'facebook') {
         const opened = await openFacebookShare();
         if (!opened) {
@@ -480,10 +692,21 @@ const PostCard = ({
             text2: 'Could not open Facebook share.',
           });
         }
-        // Do not use LATE for Facebook; keep in-app share only.
-        sharePost({ postId: post._id });
-      } else {
-        sharePost({ postId: post._id, target });
+      } else if (target === 'youtube') {
+        const opened = await openYouTubeShare();
+        if (!opened) {
+          Toast.show({
+            type: 'error',
+            text1: 'YouTube share failed',
+            text2: 'Could not open YouTube share.',
+          });
+        }
+      } else if (target === 'snapchat' || target === 'spotify') {
+        const { message, mediaUrl } = buildSharePayload();
+        await Share.share({
+          message,
+          url: mediaUrl || undefined,
+        });
       }
       setShowShareModal(false);
     } catch {
@@ -1127,6 +1350,28 @@ const PostCard = ({
 };
 
 export default PostCard;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

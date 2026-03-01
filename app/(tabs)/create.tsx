@@ -27,6 +27,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
+import * as Sharing from 'expo-sharing';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -264,15 +265,38 @@ const CreatePost = () => {
 
   const BIG_VIDEO_BYTES = 50 * 1024 * 1024;
 
-  const buildShareTargets = () => {
+  const buildShareTargets = (skipInstagram = false) => {
     const targets: string[] = [];
     if (isFacebook) targets.push('facebook');
-    if (isInstagram) targets.push('instagram');
+    if (isInstagram && !skipInstagram) targets.push('instagram');
     if (isTwitter) targets.push('twitter');
     if (isYouTube) targets.push('youtube');
     if (isSnapchat) targets.push('snapchat');
     if (isTikTok) targets.push('tiktok');
     return targets;
+  };
+
+  const shareToInstagramPersonal = async (mediaUri: string) => {
+    try {
+      const canShare = await Sharing.isAvailableAsync();
+      if (!canShare) {
+        Toast.show({
+          type: 'error',
+          text1: 'Sharing not available on this device.',
+        });
+        return;
+      }
+
+      await Sharing.shareAsync(mediaUri, {
+        dialogTitle: 'Share to Instagram',
+      });
+    } catch (error: any) {
+      Toast.show({
+        type: 'error',
+        text1: 'Instagram share failed',
+        text2: getShortErrorMessage(error, 'Could not open Instagram share.'),
+      });
+    }
   };
 
   const resetCreateForm = () => {
@@ -360,7 +384,16 @@ const CreatePost = () => {
 
     const isRemote = (uri: string) => uri.startsWith('http');
 
-    const shareTargets = buildShareTargets();
+    const instagramMediaUri = video ? videoPlayerUri || video : photo;
+    const shouldShareToInstagramApp =
+      isInstagram &&
+      !isScheduleMode &&
+      !isEditMode &&
+      !audio &&
+      !!instagramMediaUri &&
+      !isRemote(instagramMediaUri);
+
+    const shareTargets = buildShareTargets(shouldShareToInstagramApp);
 
     if (photo && !isRemote(photo)) {
       const filename = photo.split('/').pop() || 'photo.jpg';
@@ -404,6 +437,10 @@ const CreatePost = () => {
             },
             {
               onSuccess: () => {
+                if (shouldShareToInstagramApp && instagramMediaUri) {
+                  shareToInstagramPersonal(instagramMediaUri);
+                }
+
                 setPhoto(null);
                 setVideo(null);
                 setVideoPlayerUri(null);
@@ -542,6 +579,10 @@ const CreatePost = () => {
     } else {
       createPost(formData, {
         onSuccess: () => {
+          if (shouldShareToInstagramApp && instagramMediaUri) {
+            shareToInstagramPersonal(instagramMediaUri);
+          }
+
           setPhoto(null);
           setVideo(null);
           setVideoPlayerUri(null);

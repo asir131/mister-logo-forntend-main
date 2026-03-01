@@ -43,3 +43,4 @@ app-example
 /android
 text.txt
 google-services.json
+.env

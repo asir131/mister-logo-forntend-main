@@ -86,7 +86,8 @@
       "@react-native-community/datetimepicker",
       "@react-native-firebase/app",
       "@react-native-firebase/messaging",
-      "@react-native-firebase/auth"
+      "@react-native-firebase/auth",
+      "@rnmapbox/maps"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -94,5 +95,3 @@
     }
   }
 }
-
-

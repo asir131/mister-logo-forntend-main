@@ -13,11 +13,11 @@ import useNotificationStore from '@/store/notification.store';
 import Feather from '@expo/vector-icons/Feather';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import UserAvatar from '@/components/ui/UserAvatar';
-import { router } from 'expo-router';
 import * as Location from 'expo-location';
+import { router } from 'expo-router';
+import Mapbox from '@rnmapbox/maps';
 import React, { useMemo, useState } from 'react';
 import {
-  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -30,10 +30,12 @@ import {
 import Toast from 'react-native-toast-message';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const MAP_PREVIEW_WIDTH = 1000;
-const MAP_PREVIEW_HEIGHT = 220;
-const MAP_FULL_WIDTH = 1200;
-const MAP_FULL_HEIGHT = 720;
+const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || '';
+if (MAPBOX_TOKEN) {
+  Mapbox.setAccessToken(MAPBOX_TOKEN);
+}
+
+const DEFAULT_COORDINATE: [number, number] = [90.4125, 23.8103];
 
 const formatMessageTime = (createdAt: string) => {
   const messageDate = new Date(createdAt);
@@ -56,23 +58,17 @@ const formatMessageTime = (createdAt: string) => {
   });
 };
 
-const buildStaticMapUrl = (
+const pickMapCenter = (
   locations: Array<{ latitude: number; longitude: number }>,
-  width: number,
-  height: number,
-) => {
-  if (!locations.length) {
-    return `https://staticmap.openstreetmap.de/staticmap.php?center=23.8103,90.4125&zoom=2&size=${width}x${height}`;
-  }
+): [number, number] => {
+  if (!locations.length) return DEFAULT_COORDINATE;
 
-  const markerPart = locations
-    .slice(0, 30)
-    .map((item) => `${item.latitude},${item.longitude},lightblue1`)
-    .join('|');
+  const lats = locations.map(item => item.latitude);
+  const lngs = locations.map(item => item.longitude);
+  const centerLat = lats.reduce((sum, value) => sum + value, 0) / lats.length;
+  const centerLng = lngs.reduce((sum, value) => sum + value, 0) / lngs.length;
 
-  return `https://staticmap.openstreetmap.de/staticmap.php?size=${width}x${height}&markers=${encodeURIComponent(
-    markerPart,
-  )}`;
+  return [centerLng, centerLat];
 };
 
 const ChatsList = () => {
@@ -138,29 +134,29 @@ const ChatsList = () => {
     return chatData.filter((chat: any) => chat?.name.toLowerCase().includes(query));
   }, [searchQuery, chatData]);
 
-  const mapPreviewUri = useMemo(
+  const validSharedLocations = useMemo(
     () =>
-      buildStaticMapUrl(
-        sharedLocations
-          .filter((item: any) => Number.isFinite(Number(item?.latitude)) && Number.isFinite(Number(item?.longitude)))
-          .map((item: any) => ({ latitude: Number(item.latitude), longitude: Number(item.longitude) })),
-        MAP_PREVIEW_WIDTH,
-        MAP_PREVIEW_HEIGHT,
-      ),
+      sharedLocations
+        .filter(
+          (item: any) =>
+            Number.isFinite(Number(item?.latitude)) && Number.isFinite(Number(item?.longitude)),
+        )
+        .map((item: any) => ({
+          userId: String(item?.userId || ''),
+          name: String(item?.name || 'User'),
+          latitude: Number(item.latitude),
+          longitude: Number(item.longitude),
+        })),
     [sharedLocations],
   );
 
-  const mapFullUri = useMemo(
-    () =>
-      buildStaticMapUrl(
-        sharedLocations
-          .filter((item: any) => Number.isFinite(Number(item?.latitude)) && Number.isFinite(Number(item?.longitude)))
-          .map((item: any) => ({ latitude: Number(item.latitude), longitude: Number(item.longitude) })),
-        MAP_FULL_WIDTH,
-        MAP_FULL_HEIGHT,
-      ),
-    [sharedLocations],
+  const mapCenter = useMemo(
+    () => pickMapCenter(validSharedLocations),
+    [validSharedLocations],
   );
+
+  const mapZoom = validSharedLocations.length > 0 ? 11 : 2;
+  const hasMapboxToken = MAPBOX_TOKEN.length > 0;
 
   const lastMessageTexts = useMemo(
     () => filteredChats.map((chat: any) => String(chat?.lastMessage?.text || '')),
@@ -295,24 +291,54 @@ const ChatsList = () => {
 
           <View className='mx-6 mt-4'>
             <TouchableOpacity
-              activeOpacity={mapPreviewUri ? 0.9 : 1}
-              disabled={!mapPreviewUri}
+              activeOpacity={0.9}
               onPress={() => setFullMapVisible(true)}
               className='w-full h-[120px] rounded-2xl overflow-hidden border border-black/20 dark:border-[#FFFFFF1A] bg-[#E6EEF8] dark:bg-[#1A2433]'
             >
-              <Image
-                source={{ uri: mapPreviewUri }}
-                resizeMode='cover'
-                style={{ width: '100%', height: '100%' }}
-              />
-              {sharedLocations.length === 0 && (
+              {hasMapboxToken ? (
+                <Mapbox.MapView
+                  style={{ flex: 1 }}
+                  styleURL={Mapbox.StyleURL.Street}
+                  logoEnabled={false}
+                  attributionEnabled={false}
+                  scaleBarEnabled={false}
+                  rotateEnabled={false}
+                  pitchEnabled={false}
+                  zoomEnabled={false}
+                  scrollEnabled={false}
+                >
+                  <Mapbox.Camera
+                    centerCoordinate={mapCenter}
+                    zoomLevel={mapZoom}
+                    animationMode='none'
+                  />
+                  {validSharedLocations.map(location => (
+                    <Mapbox.PointAnnotation
+                      key={`preview-${location.userId}`}
+                      id={`preview-${location.userId}`}
+                      coordinate={[location.longitude, location.latitude]}
+                    >
+                      <View className='w-3 h-3 rounded-full bg-[#007AFF] border border-white' />
+                    </Mapbox.PointAnnotation>
+                  ))}
+                </Mapbox.MapView>
+              ) : (
+                <View className='flex-1 items-center justify-center'>
+                  <Text className='text-black/60 dark:text-white/60 text-xs'>
+                    Mapbox token missing
+                  </Text>
+                </View>
+              )}
+
+              {validSharedLocations.length === 0 && (
                 <View className='absolute left-0 right-0 top-0 bottom-0 items-center justify-center'>
                   <Text className='text-white text-sm bg-black/40 px-3 py-1 rounded-full'>
                     {tx(8, 'No shared locations yet')}
                   </Text>
                 </View>
               )}
-              {!!mapPreviewUri && (
+
+              {hasMapboxToken && (
                 <View className='absolute left-0 right-0 bottom-0 bg-black/40 px-3 py-2'>
                   <Text className='text-white text-xs'>
                     {tx(9, 'Tap to open full map')}
@@ -422,16 +448,35 @@ const ChatsList = () => {
                   </TouchableOpacity>
                 </View>
 
-                {!!mapFullUri ? (
-                  <Image
-                    source={{ uri: mapFullUri }}
-                    resizeMode='cover'
-                    style={{ width: '100%', height: 320, borderRadius: 14 }}
-                  />
+                {hasMapboxToken ? (
+                  <View className='h-[320px] rounded-2xl overflow-hidden'>
+                    <Mapbox.MapView
+                      style={{ flex: 1 }}
+                      styleURL={Mapbox.StyleURL.Street}
+                      logoEnabled={false}
+                      attributionEnabled={false}
+                      scaleBarEnabled={false}
+                    >
+                      <Mapbox.Camera
+                        centerCoordinate={mapCenter}
+                        zoomLevel={mapZoom}
+                        animationMode='none'
+                      />
+                      {validSharedLocations.map(location => (
+                        <Mapbox.PointAnnotation
+                          key={`full-${location.userId}`}
+                          id={`full-${location.userId}`}
+                          coordinate={[location.longitude, location.latitude]}
+                        >
+                          <View className='w-3.5 h-3.5 rounded-full bg-[#007AFF] border border-white' />
+                        </Mapbox.PointAnnotation>
+                      ))}
+                    </Mapbox.MapView>
+                  </View>
                 ) : (
                   <View className='h-[220px] items-center justify-center bg-[#E6EEF8] dark:bg-[#1A2433] rounded-2xl'>
                     <Text className='text-black/60 dark:text-white/60'>
-                      {tx(8, 'No shared locations yet')}
+                      Mapbox token missing
                     </Text>
                   </View>
                 )}
@@ -462,5 +507,9 @@ const ChatsList = () => {
 };
 
 export default ChatsList;
+
+
+
+
 
 
