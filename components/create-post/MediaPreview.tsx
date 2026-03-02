@@ -16,10 +16,16 @@ import {
 interface MediaPreviewProps {
   photo: string | null;
   video: string | null;
+  videoFallback?: string | null;
   audio: string | null;
 }
 
-const MediaPreview: React.FC<MediaPreviewProps> = ({ photo, video, audio }) => {
+const MediaPreview: React.FC<MediaPreviewProps> = ({
+  photo,
+  video,
+  videoFallback = null,
+  audio,
+}) => {
   const isFocused = useIsFocused();
   const audioPlayer = useAudioPlayer(audio || '');
   const videoRef = React.useRef<Video | null>(null);
@@ -27,34 +33,50 @@ const MediaPreview: React.FC<MediaPreviewProps> = ({ photo, video, audio }) => {
   const [isVideoReady, setIsVideoReady] = React.useState(false);
   const [showSlowVideoHint, setShowSlowVideoHint] = React.useState(false);
   const [videoError, setVideoError] = React.useState<string | null>(null);
+  const [photoError, setPhotoError] = React.useState<string | null>(null);
   const [videoRenderKey, setVideoRenderKey] = React.useState(0);
   const [isVideoPlaying, setIsVideoPlaying] = React.useState(true);
   const [isVideoMuted, setIsVideoMuted] = React.useState(true);
+  const [triedVideoFallback, setTriedVideoFallback] = React.useState(false);
+  const [currentVideoUrl, setCurrentVideoUrl] = React.useState(
+    (video || '').trim()
+  );
 
-  const videoUrl = (video || '').trim();
+  const videoUrl = currentVideoUrl;
+  const fallbackVideoUrl = (videoFallback || '').trim();
 
   React.useEffect(() => {
-    if (!videoUrl) return;
+    const nextPrimary = (video || '').trim();
+    setCurrentVideoUrl(nextPrimary);
+    setTriedVideoFallback(false);
+  }, [video]);
+
+  React.useEffect(() => {
+    if (!currentVideoUrl) return;
     setIsVideoReady(false);
     setShowSlowVideoHint(false);
     setVideoError(null);
     setIsVideoPlaying(true);
     setIsVideoMuted(true);
     setVideoRenderKey(prev => prev + 1);
-  }, [videoUrl]);
+  }, [currentVideoUrl]);
 
   React.useEffect(() => {
-    if (!videoUrl || isVideoReady) return;
+    setPhotoError(null);
+  }, [photo]);
+
+  React.useEffect(() => {
+    if (!currentVideoUrl || isVideoReady) return;
 
     const timer = setTimeout(() => {
       setShowSlowVideoHint(true);
     }, 4000);
 
     return () => clearTimeout(timer);
-  }, [videoUrl, isVideoReady, videoRenderKey]);
+  }, [currentVideoUrl, isVideoReady, videoRenderKey]);
 
   React.useEffect(() => {
-    if (!videoUrl) return;
+    if (!currentVideoUrl) return;
 
     const syncFocusPlayback = async () => {
       if (!videoRef.current) return;
@@ -74,7 +96,7 @@ const MediaPreview: React.FC<MediaPreviewProps> = ({ photo, video, audio }) => {
     };
 
     syncFocusPlayback();
-  }, [isFocused, isVideoPlaying, videoUrl]);
+  }, [isFocused, isVideoPlaying, currentVideoUrl]);
 
   const toggleAudioPlayback = () => {
     if (audioPlayer.playing) {
@@ -114,7 +136,7 @@ const MediaPreview: React.FC<MediaPreviewProps> = ({ photo, video, audio }) => {
   };
 
   const handleRetry = () => {
-    if (!videoUrl) return;
+    if (!currentVideoUrl) return;
 
     setIsVideoReady(false);
     setShowSlowVideoHint(false);
@@ -151,11 +173,28 @@ const MediaPreview: React.FC<MediaPreviewProps> = ({ photo, video, audio }) => {
   return (
     <View className='w-full h-[300px] bg-black rounded-2xl mb-4 overflow-hidden relative'>
       {photo && (
-        <Image
-          source={{ uri: photo }}
-          className='absolute inset-0 w-full h-full'
-          contentFit='cover'
-        />
+        <>
+          <Image
+            source={{ uri: photo }}
+            style={StyleSheet.absoluteFillObject}
+            contentFit='cover'
+            cachePolicy='none'
+            onError={(error) => {
+              setPhotoError('Unable to preview this image on this device.');
+              console.log('[MediaPreview][photo] load error', {
+                uri: photo,
+                error,
+              });
+            }}
+          />
+          {photoError && (
+            <View className='absolute inset-0 items-center justify-center bg-black/70 px-4'>
+              <Text className='text-white text-center font-roboto-medium'>
+                {photoError}
+              </Text>
+            </View>
+          )}
+        </>
       )}
 
       {videoUrl && (
@@ -178,7 +217,36 @@ const MediaPreview: React.FC<MediaPreviewProps> = ({ photo, video, audio }) => {
               setShowSlowVideoHint(false);
               setVideoError(null);
             }}
-            onError={() => {
+            onLoad={() => {
+              setIsVideoReady(true);
+              setShowSlowVideoHint(false);
+              setVideoError(null);
+            }}
+            onError={(error) => {
+              const canFallback =
+                !triedVideoFallback &&
+                !!fallbackVideoUrl &&
+                fallbackVideoUrl !== currentVideoUrl;
+
+              if (canFallback) {
+                console.log('[MediaPreview][video] primary failed, trying fallback', {
+                  primary: currentVideoUrl,
+                  fallback: fallbackVideoUrl,
+                  error,
+                });
+                setTriedVideoFallback(true);
+                setCurrentVideoUrl(fallbackVideoUrl);
+                setIsVideoReady(false);
+                setShowSlowVideoHint(false);
+                setVideoError(null);
+                return;
+              }
+
+              console.log('[MediaPreview][video] load error', {
+                uri: currentVideoUrl,
+                fallbackTried: triedVideoFallback,
+                error,
+              });
               setVideoError('Unable to preview this video on this device.');
               setIsVideoReady(false);
             }}

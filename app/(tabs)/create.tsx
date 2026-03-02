@@ -23,6 +23,7 @@ import Feather from '@expo/vector-icons/Feather';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import SimpleLineIcons from '@expo/vector-icons/SimpleLineIcons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { ResizeMode, Video } from 'expo-av';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
@@ -675,6 +676,22 @@ const resolveVideoPreviewUri = async (uri: string, name?: string | null) => {
   return uri;
 };
 
+const resolveImagePreviewUri = async (uri: string, name?: string | null) => {
+  if (!uri) return uri;
+  if (!uri.startsWith('content://')) return uri;
+
+  try {
+    const extFromName = name?.split('.').pop()?.toLowerCase();
+    const ext = extFromName || 'jpg';
+    const targetPath = `${FileSystem.cacheDirectory}picked-image-${Date.now()}.${ext}`;
+    await FileSystem.copyAsync({ from: uri, to: targetPath });
+    return targetPath;
+  } catch (error) {
+    console.log('[pickPhoto] could not create preview file, using original uri', error);
+    return uri;
+  }
+};
+
 const pickVideo = async () => {
   try {
     setVideo(null);
@@ -742,13 +759,26 @@ const pickPhoto = async () => {
   setVideoName(null);
   setAudio(null);
   
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ['images'],
-    quality: 1,
-  });
-  
-  if (!result.canceled) {
-    setPhoto(result.assets[0].uri);
+  try {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 1,
+    });
+
+    if (result.canceled) return;
+
+    const picked = result.assets[0];
+    const rawUri = picked?.uri || '';
+    const pickedName = picked?.fileName ?? null;
+    const previewUri = await resolveImagePreviewUri(rawUri, pickedName);
+    setPhoto(previewUri || rawUri);
+  } catch (error) {
+    console.error('[pickPhoto] Error:', error);
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: 'Failed to select image. Please try another image.',
+    });
   }
 };
 
@@ -1059,29 +1089,44 @@ const pickAudio = async () => {
                 )}
               </View>
               <View className='px-6 pt-4'>
-                {/* Always use MediaPreview for video and audio, photo has separate preview */}
                 {photo ? (
                   <View className='w-full h-[300px] justify-center items-center bg-black/10 dark:bg-[#FFFFFF0D] rounded-2xl mb-4 overflow-hidden relative'>
                     <Image
                       source={{ uri: photo }}
-                      className='w-full h-full'
+                      style={{ width: '100%', height: '100%' }}
                       contentFit='cover'
                       cachePolicy='none'
                     />
                   </View>
-                ) : (videoPlayerUri || video) || audio ? (
+                ) : (videoPlayerUri || video) ? (
+                  <View className='w-full h-[300px] justify-center items-center bg-black/10 dark:bg-[#FFFFFF0D] rounded-2xl mb-4 overflow-hidden relative'>
+                    <Video
+                      source={{ uri: videoPlayerUri || video || '' }}
+                      style={{ width: '100%', height: '100%' }}
+                      useNativeControls
+                      resizeMode={ResizeMode.CONTAIN}
+                      shouldPlay={false}
+                      isLooping={false}
+                      onError={(error) => {
+                        console.log('[create][video-preview] load error', {
+                          rawUri: video,
+                          previewUri: videoPlayerUri,
+                          error,
+                        });
+                        Toast.show({
+                          type: 'error',
+                          text1: 'Preview Error',
+                          text2: 'Could not load video preview on this device.',
+                        });
+                      }}
+                    />
+                  </View>
+                ) : (
                   <MediaPreview
-                    photo={photo}
-                    video={videoPlayerUri || video}
+                    photo={null}
+                    video={null}
                     audio={audio}
                   />
-                ) : (
-                  <View className='w-full h-[100px] justify-center items-center bg-black/10 dark:bg-[#FFFFFF0D] rounded-2xl mb-4 border border-dashed border-black/20 dark:border-[#FFFFFF0D]'>
-                    <Feather name='image' size={40} color='#666' style={{ opacity: 0.5 }} />
-                    <Text className='text-gray-400 text-center mt-4 font-roboto-regular'>
-                      Select media to preview
-                    </Text>
-                  </View>
                 )}
               </View>
 
