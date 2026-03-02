@@ -20,7 +20,7 @@ import { Image } from 'expo-image';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -39,6 +39,23 @@ import Toast from 'react-native-toast-message';
 import { useIsFocused } from '@react-navigation/native';
 
 type TabType = 'manual' | 'active' | 'organic';
+
+const toPlayableVideoUrl = (rawUrl?: string) => {
+  const url = String(rawUrl || '').trim();
+  if (!url) return '';
+
+  if (url.includes('/res.cloudinary.com/') && url.includes('/video/upload/')) {
+    if (url.includes('/video/upload/f_mp4,') || url.includes('/video/upload/f_mp4/')) {
+      return url;
+    }
+    return url.replace(
+      '/video/upload/',
+      '/video/upload/f_mp4,vc_h264,ac_aac,q_auto:good/'
+    );
+  }
+
+  return url;
+};
 
 const TrendingScreen = () => {
   const { mode } = useThemeStore();
@@ -262,7 +279,7 @@ const TrendingScreen = () => {
 
   const normalizedSearch = usernameSearch.trim().toLowerCase();
 
-  const isSearchMatch = (post: any) => {
+  const isSearchMatch = useCallback((post: any) => {
     if (!normalizedSearch) return true;
     const username = String(post?.profile?.username || '').toLowerCase();
     const displayName = String(
@@ -278,12 +295,12 @@ const TrendingScreen = () => {
       displayName.includes(normalizedSearch) ||
       postText.includes(normalizedSearch)
     );
-  };
+  }, [normalizedSearch]);
 
   const searchedFilteredPosts = useMemo(() => {
     if (!normalizedSearch) return filteredPosts;
     return filteredPosts.filter((post: any) => isSearchMatch(post));
-  }, [filteredPosts, normalizedSearch]);
+  }, [filteredPosts, normalizedSearch, isSearchMatch]);
 
   const searchedActiveUblasts = useMemo(() => {
     if (!normalizedSearch) return activeUblasts;
@@ -296,16 +313,13 @@ const TrendingScreen = () => {
       if (!sharedPost) return false;
       return isSearchMatch(sharedPost);
     });
-  }, [activeUblasts, sharedByUblastId, normalizedSearch]);
+  }, [activeUblasts, sharedByUblastId, normalizedSearch, isSearchMatch]);
 
-  const [visibleIds, setVisibleIds] = useState<Set<string>>(new Set());
+  const [activeTrendingId, setActiveTrendingId] = useState<string | null>(null);
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 });
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
-    const ids = new Set<string>();
-    viewableItems.forEach((vi: any) => {
-      if (vi?.item?._id) ids.add(vi.item._id);
-    });
-    setVisibleIds(ids);
+    const firstVisibleId = String(viewableItems?.[0]?.item?._id || '') || null;
+    setActiveTrendingId(prev => (prev === firstVisibleId ? prev : firstVisibleId));
   });
 
   const renderHeader = () => (
@@ -500,9 +514,13 @@ const TrendingScreen = () => {
       });
     };
 
-    const mediaUrl = item?.mediaUrl || '';
+    const mediaUrlRaw = String(item?.mediaUrl || '').trim();
     const mediaType = item?.mediaType;
-    const player = useVideoPlayer(mediaUrl, p => {
+    const shouldUsePlayer = mediaType === 'video' || mediaType === 'audio';
+    const mediaPlaybackUrl =
+      mediaType === 'video' ? toPlayableVideoUrl(mediaUrlRaw) : mediaUrlRaw;
+    const shouldInitPlayer = shouldUsePlayer && isVisible && isFocused;
+    const player = useVideoPlayer(shouldInitPlayer ? mediaPlaybackUrl : '', p => {
       p.loop = true;
     });
 
@@ -656,13 +674,13 @@ const TrendingScreen = () => {
           </View>
         </View>
 
-        {mediaType === 'image' && mediaUrl ? (
+        {mediaType === 'image' && mediaUrlRaw ? (
           <Image
-            source={{ uri: mediaUrl }}
+            source={{ uri: mediaUrlRaw }}
             style={{ width: '100%', height: 220 }}
             contentFit='cover'
           />
-        ) : mediaType === 'video' && mediaUrl ? (
+        ) : mediaType === 'video' && mediaPlaybackUrl ? (
           <VideoView
             style={{ width: '100%', height: 220 }}
             player={player}
@@ -952,7 +970,7 @@ const TrendingScreen = () => {
                       post={sharedPost}
                       currentUserId={user?.id}
                       className='mt-4 mx-5'
-                      isVisible={isFocused && visibleIds.has(sharedPost._id)}
+                      isVisible={isFocused && activeTrendingId === sharedPost._id}
                       disableShare={
                         !isEligible &&
                         (Boolean((sharedPost as any)?.ublastId) ||
@@ -965,7 +983,7 @@ const TrendingScreen = () => {
                 return (
                   <UblastCard
                     item={item}
-                    isVisible={visibleIds.has(item._id)}
+                    isVisible={activeTrendingId === item._id}
                     isFocused={isFocused}
                   />
                 );
@@ -975,7 +993,7 @@ const TrendingScreen = () => {
                   post={item}
                   currentUserId={user?.id}
                   className='mt-4 mx-5'
-                  isVisible={isFocused && visibleIds.has(item._id)}
+                  isVisible={isFocused && activeTrendingId === item._id}
                   disableShare={
                     !isEligible &&
                     (Boolean((item as any)?.ublastId) ||
@@ -994,6 +1012,10 @@ const TrendingScreen = () => {
             keyboardDismissMode='none'
             viewabilityConfig={viewabilityConfig.current}
             onViewableItemsChanged={onViewableItemsChanged.current}
+            initialNumToRender={4}
+            maxToRenderPerBatch={4}
+            windowSize={5}
+            removeClippedSubviews={true}
             refreshing={usernameSearch.trim().length > 0 ? false : selectedTab === 'active' ? isActiveLoading : isRefetching}
             onRefresh={() => {
               if (selectedTab === 'active') {

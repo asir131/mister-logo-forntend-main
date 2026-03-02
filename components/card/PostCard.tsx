@@ -77,6 +77,40 @@ interface Post {
   dueAt?: string;
 }
 
+type PostCardProps = {
+  className?: string;
+  img?: any;
+  post?: Post;
+  currentUserId?: string;
+  isSavedScreen?: boolean;
+  isScheduled?: boolean;
+  showOwnerActions?: boolean;
+  hideFollowButton?: boolean;
+  hideActions?: boolean;
+  isVisible?: boolean;
+  officeVariant?: boolean;
+  disableShare?: boolean;
+  shareDisabledMessage?: string;
+};
+
+const toPlayableVideoUrl = (rawUrl?: string) => {
+  const url = String(rawUrl || '').trim();
+  if (!url) return '';
+
+  // Force Cloudinary delivery to H.264 MP4 for more stable Android playback.
+  if (url.includes('/res.cloudinary.com/') && url.includes('/video/upload/')) {
+    if (url.includes('/video/upload/f_mp4,') || url.includes('/video/upload/f_mp4/')) {
+      return url;
+    }
+    return url.replace(
+      '/video/upload/',
+      '/video/upload/f_mp4,vc_h264,ac_aac,q_auto:good/'
+    );
+  }
+
+  return url;
+};
+
 const PostCard = ({
   className,
   img,
@@ -91,21 +125,7 @@ const PostCard = ({
   officeVariant = false,
   disableShare = false,
   shareDisabledMessage,
-}: {
-  className?: string;
-  img?: any;
-  post?: Post;
-  currentUserId?: string;
-  isSavedScreen?: boolean;
-  isScheduled?: boolean;
-  showOwnerActions?: boolean;
-  hideFollowButton?: boolean;
-  hideActions?: boolean;
-  isVisible?: boolean;
-  officeVariant?: boolean;
-  disableShare?: boolean;
-  shareDisabledMessage?: string;
-}) => {
+}: PostCardProps) => {
   const [isFollowing, setIsFollowing] = useState(
     post?.viewerIsFollowing || false
   );
@@ -115,18 +135,32 @@ const PostCard = ({
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [showShareModal, setShowShareModal] = useState(false);
+  const isCardActive = isVisible !== false;
 
   const {
     data: commentData,
     fetchNextPage: fetchNextComments,
     hasNextPage: hasNextComments,
     isFetchingNextPage: isFetchingNextComments,
-  } = useUserGetComment(post?._id || '', { limit: 5 });
+  } = useUserGetComment(post?._id || '', {
+    limit: 5,
+    enabled: showComments && isCardActive,
+  });
   const { mutate: addComment } = useUserCreateComment();
   const { mutate: deleteComment } = useDeleteComment();
 
+  const rawMediaUrl = String(post?.mediaUrl || '').trim();
+  const shouldUsePlayer =
+    post?.mediaType === 'video' || post?.mediaType === 'audio';
+  const mediaPlaybackUrl = shouldUsePlayer
+    ? post?.mediaType === 'video'
+      ? toPlayableVideoUrl(rawMediaUrl)
+      : rawMediaUrl
+    : '';
+  const shouldInitPlayer = shouldUsePlayer && isCardActive;
+
   // Video player setup
-  const player = useVideoPlayer(post?.mediaUrl || '', player => {
+  const player = useVideoPlayer(shouldInitPlayer ? mediaPlaybackUrl : '', player => {
     player.loop = true;
   });
 
@@ -159,6 +193,7 @@ const PostCard = ({
       setIsBookmarked(post.viewerHasBookmarked || false);
     }
   }, [
+    post,
     post?.viewerIsFollowing,
     post?.viewerHasLiked,
     post?.likeCount,
@@ -167,6 +202,7 @@ const PostCard = ({
   ]);
 
   useEffect(() => {
+    if (!shouldUsePlayer) return;
     if (isVisible === undefined) return;
     if (post?.mediaType === 'video') {
       if (isVisible) {
@@ -179,7 +215,7 @@ const PostCard = ({
     if (post?.mediaType === 'audio' && !isVisible) {
       player.pause();
     }
-  }, [isVisible, post?.mediaType, player]);
+  }, [isVisible, post?.mediaType, player, shouldUsePlayer]);
 
   const handleLikeToggle = () => {
     if (!post?._id) return;
@@ -196,13 +232,14 @@ const PostCard = ({
   };
 
   const handleFollowToggle = () => {
-    if (!post?.author.id) return;
+    const authorId = String(post?.author?.id || '').trim();
+    if (!authorId) return;
 
     if (isFollowing) {
-      unfollowUser(post.author.id);
+      unfollowUser(authorId);
       setIsFollowing(prev => !prev);
     } else {
-      followUser({ userId: post.author.id });
+      followUser({ userId: authorId });
       setIsFollowing(prev => !prev);
     }
   };
@@ -491,9 +528,9 @@ const PostCard = ({
 
     const connectRedirect = ExpoLinking.createURL('auth/youtube');
 
-    const tryUpload = async () => {
+    const tryUpload = async (): Promise<any> => {
       const result = await api.post('/api/youtube/share', { postId: post._id });
-      return result;
+      return (result as any)?.data ?? result;
     };
 
     try {
@@ -520,7 +557,8 @@ const PostCard = ({
       const authRes = await api.get(
         '/api/youtube/connect-url?clientRedirect=' + encodeURIComponent(connectRedirect)
       );
-      const authUrl = String(authRes?.url || '');
+      const authPayload = (authRes as any)?.data ?? authRes;
+      const authUrl = String(authPayload?.url || '');
       if (!authUrl) return false;
 
       const authResult = await WebBrowser.openAuthSessionAsync(authUrl, connectRedirect);
@@ -753,13 +791,17 @@ const PostCard = ({
   const { data: translatedDesc } = useTranslateTexts({
     texts: [postText],
     targetLang: preferredLanguage,
-    enabled: autoTranslateEnabled,
+    enabled: autoTranslateEnabled && isCardActive,
   });
 
   const { data: translatedComments } = useTranslateTexts({
     texts: comments.map((c: any) => c?.text || ''),
     targetLang: preferredLanguage,
-    enabled: autoTranslateEnabled && showComments && comments.length > 0,
+    enabled:
+      autoTranslateEnabled &&
+      isCardActive &&
+      showComments &&
+      comments.length > 0,
   });
 
   const { data: translatedUI } = useTranslateTexts({
@@ -801,7 +843,7 @@ const PostCard = ({
       'Share to Instagram Story',
     ],
     targetLang: uiLanguage,
-    enabled: !!uiLanguage && uiLanguage !== 'EN',
+    enabled: !!uiLanguage && uiLanguage !== 'EN' && isCardActive,
   });
 
   const uiTexts = (index: number, fallback: string) =>
@@ -810,7 +852,7 @@ const PostCard = ({
   const { data: translatedOffice } = useTranslateTexts({
     texts: ['UNAP Official', 'Share required:', 'Share window expired'],
     targetLang: uiLanguage,
-    enabled: !!uiLanguage && uiLanguage !== 'EN',
+    enabled: !!uiLanguage && uiLanguage !== 'EN' && isCardActive,
   });
 
   const officeTexts = (index: number, fallback: string) =>
@@ -968,9 +1010,11 @@ const PostCard = ({
             if (isOwner) {
               router.push('/(tabs)/profile');
             } else {
+              const authorId = String(post?.author?.id || '').trim();
+              if (!authorId) return;
               router.push({
                 pathname: '/screens/profile/other-profile',
-                params: { id: post?.author?.id },
+                params: { id: authorId },
               });
             }
           }}
@@ -1118,12 +1162,12 @@ const PostCard = ({
           />
         )}
 
-        {post?.mediaType === 'video' && post?.mediaUrl && (
+        {post?.mediaType === 'video' && mediaPlaybackUrl && (
           <VideoView
             style={{ width: '100%', height: 345 }}
             player={player}
-            fullscreenOptions={{ enable: true }}
-            allowsPictureInPicture
+            nativeControls={false}
+            contentFit='cover'
           />
         )}
 
@@ -1349,7 +1393,42 @@ const PostCard = ({
   );
 };
 
-export default PostCard;
+const arePostCardPropsEqual = (prev: PostCardProps, next: PostCardProps) => {
+  if (prev.className !== next.className) return false;
+  if (prev.currentUserId !== next.currentUserId) return false;
+  if (prev.isSavedScreen !== next.isSavedScreen) return false;
+  if (prev.isScheduled !== next.isScheduled) return false;
+  if (prev.showOwnerActions !== next.showOwnerActions) return false;
+  if (prev.hideFollowButton !== next.hideFollowButton) return false;
+  if (prev.hideActions !== next.hideActions) return false;
+  if (prev.isVisible !== next.isVisible) return false;
+  if (prev.officeVariant !== next.officeVariant) return false;
+  if (prev.disableShare !== next.disableShare) return false;
+  if (prev.shareDisabledMessage !== next.shareDisabledMessage) return false;
+
+  const prevPost = prev.post;
+  const nextPost = next.post;
+  if (!prevPost && !nextPost) return true;
+  if (!prevPost || !nextPost) return false;
+  if (prevPost._id !== nextPost._id) return false;
+
+  // Compare frequently changing fields so UI stays accurate without full rerender churn.
+  if (prevPost.description !== nextPost.description) return false;
+  if (prevPost.mediaUrl !== nextPost.mediaUrl) return false;
+  if (prevPost.mediaType !== nextPost.mediaType) return false;
+  if (prevPost.likeCount !== nextPost.likeCount) return false;
+  if (prevPost.commentCount !== nextPost.commentCount) return false;
+  if (prevPost.viewerHasLiked !== nextPost.viewerHasLiked) return false;
+  if (prevPost.viewerIsFollowing !== nextPost.viewerIsFollowing) return false;
+  if (prevPost.shareToFacebook !== nextPost.shareToFacebook) return false;
+  if (prevPost.shareToInstagram !== nextPost.shareToInstagram) return false;
+  if (prevPost.scheduledFor !== nextPost.scheduledFor) return false;
+  if (prevPost.dueAt !== nextPost.dueAt) return false;
+
+  return true;
+};
+
+export default React.memo(PostCard, arePostCardPropsEqual);
 
 
 

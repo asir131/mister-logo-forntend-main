@@ -71,15 +71,11 @@ const ScheduledPosts = () => {
     </View>
   );
 
-  const [visibleIds, setVisibleIds] = useState<Set<string>>(new Set());
+  const [activePostId, setActivePostId] = useState<string | null>(null);
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
-    const next = new Set<string>(
-      viewableItems
-        .map((v: any) => v?.item?._id)
-        .filter((id: unknown): id is string => typeof id === 'string')
-    );
-    setVisibleIds(next);
+    const firstVisibleId = String(viewableItems?.[0]?.item?._id || '') || null;
+    setActivePostId(prev => (prev === firstVisibleId ? prev : firstVisibleId));
   }).current;
 
   return (
@@ -97,12 +93,19 @@ const ScheduledPosts = () => {
                 className='mt-0 mb-6 mx-4'
                 currentUserId={user?.id}
                 isScheduled={true}
-                isVisible={isFocused && visibleIds.has(item?._id)}
+                isVisible={isFocused && activePostId === item?._id}
               />
             )}
-            keyExtractor={item => item?._id || Math.random().toString()}
+            keyExtractor={(item, index) =>
+              item?._id ? String(item._id) : `scheduled-post-${index}`
+            }
             ListHeaderComponent={renderHeader}
             showsVerticalScrollIndicator={false}
+            initialNumToRender={3}
+            maxToRenderPerBatch={3}
+            windowSize={5}
+            updateCellsBatchingPeriod={50}
+            removeClippedSubviews={true}
             onEndReached={() => {
               if (hasNextPage && !isFetchingNextPage) {
                 fetchNextPage();

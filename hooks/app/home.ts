@@ -15,7 +15,7 @@ export const useGetAllPost = () => {
       return result;
     },
     getNextPageParam: (lastPage: any, allPages) => {
-      const posts = lastPage?.posts || [];
+      const posts = Array.isArray(lastPage?.posts) ? lastPage.posts : [];
       if (posts.length === 0) return undefined;
       return allPages.length + 1;
     },
@@ -59,19 +59,21 @@ export const useUserFollow = () => {
 
       queryClient.setQueryData(['post'], (old: any) => {
         if (!old) return old;
-        const updatePosts = (posts: any[]) =>
-          posts.map(p =>
+        const updatePosts = (posts: any[]) => {
+          const safePosts = Array.isArray(posts) ? posts : [];
+          return safePosts.map(p =>
             p.author?.id === variables.userId
               ? { ...p, viewerIsFollowing: true }
               : p
           );
+        };
         if (Array.isArray(old)) return updatePosts(old);
         if (old.pages) {
           return {
             ...old,
             pages: old.pages.map((page: any) => ({
               ...page,
-              posts: updatePosts(page.posts),
+              posts: updatePosts(page?.posts),
             })),
           };
         }
@@ -143,17 +145,19 @@ export const useUserUnFollow = () => {
 
       queryClient.setQueryData(['post'], (old: any) => {
         if (!old) return old;
-        const updatePosts = (posts: any[]) =>
-          posts.map(p =>
+        const updatePosts = (posts: any[]) => {
+          const safePosts = Array.isArray(posts) ? posts : [];
+          return safePosts.map(p =>
             p.author?.id === id ? { ...p, viewerIsFollowing: false } : p
           );
+        };
         if (Array.isArray(old)) return updatePosts(old);
         if (old.pages) {
           return {
             ...old,
             pages: old.pages.map((page: any) => ({
               ...page,
-              posts: updatePosts(page.posts),
+              posts: updatePosts(page?.posts),
             })),
           };
         }
@@ -205,8 +209,9 @@ export const useUserLike = () => {
 
       queryClient.setQueryData(['post'], (old: any) => {
         if (!old) return old;
-        const updatePosts = (posts: any[]) =>
-          posts.map(p =>
+        const updatePosts = (posts: any[]) => {
+          const safePosts = Array.isArray(posts) ? posts : [];
+          return safePosts.map(p =>
             p._id === variables.postId
               ? {
                   ...p,
@@ -215,13 +220,14 @@ export const useUserLike = () => {
                 }
               : p
           );
+        };
         if (Array.isArray(old)) return updatePosts(old);
         if (old.pages) {
           return {
             ...old,
             pages: old.pages.map((page: any) => ({
               ...page,
-              posts: updatePosts(page.posts),
+              posts: updatePosts(page?.posts),
             })),
           };
         }
@@ -254,8 +260,9 @@ export const useUserUnLike = () => {
 
       queryClient.setQueryData(['post'], (old: any) => {
         if (!old) return old;
-        const updatePosts = (posts: any[]) =>
-          posts.map(p =>
+        const updatePosts = (posts: any[]) => {
+          const safePosts = Array.isArray(posts) ? posts : [];
+          return safePosts.map(p =>
             p._id === id
               ? {
                   ...p,
@@ -264,13 +271,14 @@ export const useUserUnLike = () => {
                 }
               : p
           );
+        };
         if (Array.isArray(old)) return updatePosts(old);
         if (old.pages) {
           return {
             ...old,
             pages: old.pages.map((page: any) => ({
               ...page,
-              posts: updatePosts(page.posts),
+              posts: updatePosts(page?.posts),
             })),
           };
         }
@@ -290,7 +298,10 @@ export const useUserUnLike = () => {
   });
 };
 
-export const useUserGetComment = (id: string, options?: { limit?: number }) => {
+export const useUserGetComment = (
+  id: string,
+  options?: { limit?: number; enabled?: boolean }
+) => {
   return useInfiniteQuery({
     queryKey: ['comment', id, options?.limit ?? 5],
     queryFn: async ({ pageParam = 1 }) => {
@@ -304,7 +315,7 @@ export const useUserGetComment = (id: string, options?: { limit?: number }) => {
       return page < totalPages ? page + 1 : undefined;
     },
     initialPageParam: 1,
-    enabled: !!id,
+    enabled: !!id && (options?.enabled ?? true),
   });
 };
 

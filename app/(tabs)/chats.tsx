@@ -131,7 +131,9 @@ const ChatsList = () => {
   const filteredChats = useMemo(() => {
     if (!searchQuery.trim()) return chatData;
     const query = searchQuery.toLowerCase();
-    return chatData.filter((chat: any) => chat?.name.toLowerCase().includes(query));
+    return chatData.filter((chat: any) =>
+      String(chat?.name || '').toLowerCase().includes(query)
+    );
   }, [searchQuery, chatData]);
 
   const validSharedLocations = useMemo(

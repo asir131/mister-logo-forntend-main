@@ -66,6 +66,7 @@ const StoryItem = ({
     commentsData?.pages?.flatMap((page: any) => page?.comments || []) || [];
   const { data: profileData } = useGetMyProfile();
   const { language: storedLanguage } = useLanguageStore();
+  const isStoryActive = isVisible && isFocused;
   // @ts-ignore
   const preferredLanguage =
     (profileData as any)?.profile?.preferredLanguage || storedLanguage;
@@ -76,7 +77,7 @@ const StoryItem = ({
   const { data: translatedText } = useTranslateTexts({
     texts: [item.text || ''],
     targetLang: preferredLanguage,
-    enabled: autoTranslateEnabled,
+    enabled: autoTranslateEnabled && isStoryActive,
   });
 
   const { data: translatedComments } = useTranslateTexts({
@@ -88,13 +89,13 @@ const StoryItem = ({
   const { data: translatedUI } = useTranslateTexts({
     texts: ['Comments', 'Write a comment...', 'No comments yet'],
     targetLang: preferredLanguage,
-    enabled: autoTranslateEnabled,
+    enabled: autoTranslateEnabled && isStoryActive,
   });
 
   const uiTexts = (index: number, fallback: string) =>
     translatedUI?.translations?.[index] || fallback;
   const player = useVideoPlayer(
-    item.mediaType === 'video' ? item.storyImage : '',
+    item.mediaType === 'video' && isStoryActive ? item.storyImage : '',
     mediaTypePlayer => {
       if (item.mediaType === 'video') {
         mediaTypePlayer.loop = true;
@@ -368,7 +369,9 @@ const StoryView = () => {
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 80 });
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
     const firstVisible = viewableItems?.[0]?.item?.id || null;
-    setVisibleId(firstVisible);
+    setVisibleId((prev: string | null) =>
+      prev === firstVisible ? prev : firstVisible
+    );
   });
 
   const segments = useMemo(() => {
@@ -480,6 +483,11 @@ const StoryView = () => {
         initialScrollIndex={startIndex}
         viewabilityConfig={viewabilityConfig.current}
         onViewableItemsChanged={onViewableItemsChanged.current}
+        initialNumToRender={1}
+        maxToRenderPerBatch={2}
+        windowSize={3}
+        updateCellsBatchingPeriod={50}
+        removeClippedSubviews={true}
         onEndReached={() => {
           if (hasNextPage && !isFetchingNextPage) {
             fetchNextPage();

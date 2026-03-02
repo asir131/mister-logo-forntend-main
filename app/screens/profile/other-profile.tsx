@@ -11,12 +11,14 @@ import Feather from '@expo/vector-icons/Feather';
 import Foundation from '@expo/vector-icons/Foundation';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
+import * as Linking from 'expo-linking';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
+  RefreshControl,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -40,14 +42,34 @@ const VideoGridItem = ({ uri }: { uri: string }) => {
   );
 };
 
+const getAgeFromDate = (value?: string | Date | null) => {
+  if (!value) return null;
+  const dob = new Date(value);
+  if (Number.isNaN(dob.getTime())) return null;
+
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const monthDiff = today.getMonth() - dob.getMonth();
+  const dayDiff = today.getDate() - dob.getDate();
+
+  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+    age -= 1;
+  }
+  return age >= 0 ? age : null;
+};
+
 const OtherProfile = () => {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const rawId = params?.id;
+  const profileId = Array.isArray(rawId) ? rawId[0] : rawId;
+  const safeProfileId = String(profileId || '').trim();
   const { user } = useAuthStore();
   const { mode } = useThemeStore();
   const isLight = mode === 'light';
   const iconColor = isLight ? 'black' : 'white';
   const { language } = useLanguageStore();
-  const { data, isLoading } = useGetOtherProfile(id || '');
+  const { data, isLoading, refetch, isRefetching } =
+    useGetOtherProfile(safeProfileId);
   const { data: t } = useTranslateTexts({
     texts: [
       'Profile',
@@ -62,7 +84,7 @@ const OtherProfile = () => {
       'Music',
       'Loading...',
       'No bio yet',
-      'Date of Birth',
+      'Age',
       'Not set',
       'No photo posts found',
       'No video posts found',
@@ -83,12 +105,19 @@ const OtherProfile = () => {
   // @ts-ignore
   const viewerIsFollowingInitial = data?.viewerIsFollowing || false;
   const bioValue = profile?.bio?.trim();
-  const dobRaw = profile?.dateOfBirth ? String(profile.dateOfBirth) : '';
-  const dobDate = dobRaw ? new Date(dobRaw) : null;
-  const dobLabel =
-    dobDate && !Number.isNaN(dobDate.getTime())
-      ? dobDate.toLocaleDateString()
-      : tx(13, 'Not set');
+  const ageFromApi =
+    typeof profile?.age === 'number' && Number.isFinite(profile.age)
+      ? profile.age
+      : null;
+  const ageFromDob = getAgeFromDate(profile?.dateOfBirth);
+  const ageLabel = ageFromApi ?? ageFromDob ?? tx(13, 'Not set');
+  const normalizeLink = (value?: string) => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    return `https://${raw}`;
+  };
+  const businessLink = normalizeLink(profile?.businessLink);
   const { data: translatedBio } = useTranslateTexts({
     texts: [bioValue || ''],
     targetLang: language,
@@ -105,13 +134,18 @@ const OtherProfile = () => {
   }, [viewerIsFollowingInitial]);
 
   const handleFollowToggle = () => {
-    if (!id) return;
+    if (!safeProfileId) return;
     if (isFollowing) {
-      unfollowUser(id);
+      unfollowUser(safeProfileId);
     } else {
-      followUser({ userId: id });
+      followUser({ userId: safeProfileId });
     }
     setIsFollowing(!isFollowing);
+  };
+
+  const handleRefresh = async () => {
+    if (!safeProfileId) return;
+    await refetch();
   };
 
   const displayPosts =
@@ -134,6 +168,21 @@ const OtherProfile = () => {
     );
   }
 
+  if (!safeProfileId) {
+    return (
+      <GradientBackground>
+        <SafeAreaView className='flex-1 justify-center items-center px-6'>
+          <Text className='text-primary dark:text-white text-center font-roboto-medium text-base'>
+            Invalid user profile.
+          </Text>
+          <TouchableOpacity onPress={() => router.back()} className='mt-4 px-4 py-2 rounded-lg border border-black/20 dark:border-white/20'>
+            <Text className='text-primary dark:text-white'>Go Back</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      </GradientBackground>
+    );
+  }
+
   return (
     <GradientBackground>
       <SafeAreaView className='flex-1' edges={['top', 'left', 'right']}>
@@ -146,9 +195,10 @@ const OtherProfile = () => {
             <TouchableOpacity onPress={() => router.back()} className='p-2 -ml-2'>
               <Ionicons name='chevron-back' size={28} color={iconColor} />
             </TouchableOpacity>
-            <Text className='font-roboto-bold text-primary dark:text-white text-2xl text-center flex-1 mr-8'>
+            <Text className='font-roboto-bold text-primary dark:text-white text-2xl text-center flex-1'>
               {tx(0, 'Profile')}
             </Text>
+            <View style={{ width: 36 }} />
           </View>
 
           <View className='border-b border-black/20 dark:border-[#292929] w-full mt-2'></View>
@@ -156,6 +206,13 @@ const OtherProfile = () => {
           <ScrollView
             contentContainerStyle={{ paddingBottom: 40 }}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefetching}
+                onRefresh={handleRefresh}
+                tintColor={isLight ? '#000000' : '#FFFFFF'}
+              />
+            }
           >
             {/* profile picture */}
             <View className='flex-row gap-4 mt-4 items-center mx-6'>
@@ -184,8 +241,18 @@ const OtherProfile = () => {
                   : tx(11, 'No bio yet')}
               </Text>
               <Text className='font-roboto-regular text-primary dark:text-white mt-2'>
-                {tx(12, 'Date of Birth')}: {dobLabel}
+                {tx(12, 'Age')}: {ageLabel}
               </Text>
+              {businessLink ? (
+                <TouchableOpacity
+                  className='mt-2'
+                  onPress={() => Linking.openURL(businessLink)}
+                >
+                  <Text className='font-roboto-medium text-blue-600 dark:text-blue-300'>
+                    Buseness Link: {businessLink}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
 
             {/* border */}
@@ -236,12 +303,12 @@ const OtherProfile = () => {
                 textColor={isLight ? '#000000' : '#E6E6E6'}
                 backGroundColor={isLight ? '#F0F2F5' : '#000000'}
                 onPress={() => {
-                  if (!id) return;
+                  if (!safeProfileId) return;
                   router.push({
                     pathname: '/screens/chat/chat-screen',
                     params: {
-                      userId: id,
-                      receiverId: id,
+                      userId: safeProfileId,
+                      receiverId: safeProfileId,
                       senderId: user?.id || '',
                       conversationId: '',
                       userName: profile?.displayName || 'User',

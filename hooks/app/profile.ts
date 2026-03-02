@@ -172,13 +172,16 @@ export const useCompleteProfile = () => {
   });
 };
 
-export const useGetOtherProfile = (id: string) => {
+export const useGetOtherProfile = (id?: string) => {
+  const safeId = String(id || '').trim();
   return useQuery({
-    queryKey: ['otherProfile', id],
+    queryKey: ['otherProfile', safeId],
     queryFn: async () => {
-      const res = await api.get(`/api/users/${id}/overview`);
+      const res = await api.get(`/api/users/${safeId}/overview`);
       return res;
     },
+    enabled: safeId.length > 0,
+    retry: 1,
   });
 };
 

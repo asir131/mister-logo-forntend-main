@@ -44,6 +44,7 @@ const EditProfile = () => {
   const [instagram, setInstagram] = useState('');
   const [youtube, setYoutube] = useState('');
   const [spotify, setSpotify] = useState('');
+  const [businessLink, setBusinessLink] = useState('');
 
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -218,6 +219,7 @@ const EditProfile = () => {
       setInstagram(profile.instagramUrl || '');
       setYoutube(profile.youtubeUrl || '');
       setSpotify(profile.spotifyArtistUrl || '');
+      setBusinessLink(profile.businessLink || '');
       if (profile.profileImageUrl) {
         setProfileImage(profile.profileImageUrl);
       }
@@ -310,6 +312,7 @@ const EditProfile = () => {
       formData.append('instagramUrl', formatUrl(instagram, 'instagram'));
       formData.append('youtubeUrl', formatUrl(youtube, 'youtube'));
       formData.append('spotifyArtistUrl', formatUrl(spotify, 'spotify'));
+      formData.append('businessLink', formatUrl(businessLink));
 
       // optional socials (as per postman image)
       formData.append('tiktokUrl', '');
@@ -501,6 +504,15 @@ const EditProfile = () => {
                 style={{ textAlignVertical: 'top' }}
                 value={bio}
                 onChangeText={setBio}
+              />
+
+              <Text className='text-primary dark:text-white mt-3'>Buseness Link</Text>
+              <Input
+                className='mt-2'
+                placeholder='https://yourwebsite.com'
+                value={businessLink}
+                onChangeText={setBusinessLink}
+                type='url'
               />
 
               {/* Social Accounts Status */}

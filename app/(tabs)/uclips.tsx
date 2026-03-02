@@ -90,9 +90,14 @@ const UclipItem = ({ item, isVisible }: { item: UclipPost; isVisible: boolean })
   const { mutate: savePost } = useSavePost();
   const { mutate: unsavePost } = useUnsavePost();
   const { mutate: sharePost } = useSharePost();
-  const { data: commentData } = useUserGetComment(item._id);
+  const { data: commentData } = useUserGetComment(item._id, {
+    enabled: activeComment,
+  });
   const { mutate: addComment } = useUserCreateComment();
-  const comments = (commentData as any)?.comments || [];
+  const comments =
+    (commentData as any)?.pages?.flatMap((page: any) => page?.comments || []) ||
+    (commentData as any)?.comments ||
+    [];
   const { data: profileData } = useGetMyProfile();
   const { language: storedLanguage } = useLanguageStore();
   // @ts-ignore
@@ -105,7 +110,7 @@ const UclipItem = ({ item, isVisible }: { item: UclipPost; isVisible: boolean })
   const { data: translatedDesc } = useTranslateTexts({
     texts: [item.description || ''],
     targetLang: preferredLanguage,
-    enabled: autoTranslateEnabled,
+    enabled: autoTranslateEnabled && isVisible,
   });
 
   const { data: translatedComments } = useTranslateTexts({
@@ -117,7 +122,7 @@ const UclipItem = ({ item, isVisible }: { item: UclipPost; isVisible: boolean })
   const { data: translatedUI } = useTranslateTexts({
     texts: ['Comments', 'No comments yet. Be the first to comment!', 'Send'],
     targetLang: preferredLanguage,
-    enabled: autoTranslateEnabled,
+    enabled: autoTranslateEnabled && isVisible,
   });
 
   const uiTexts = (index: number, fallback: string) =>
@@ -128,7 +133,7 @@ const UclipItem = ({ item, isVisible }: { item: UclipPost; isVisible: boolean })
     [item.mediaUrl]
   );
 
-  const player = useVideoPlayer(playbackUrl, p => {
+  const player = useVideoPlayer(isVisible ? playbackUrl : '', p => {
     p.loop = true;
   });
 
@@ -370,7 +375,7 @@ const Uclips = () => {
   const viewabilityConfig = React.useRef({ itemVisiblePercentThreshold: 80 });
   const onViewableItemsChanged = React.useRef(({ viewableItems }: any) => {
     const firstVisible = viewableItems?.[0]?.item?._id || null;
-    setVisibleId(firstVisible);
+    setVisibleId(prev => (prev === firstVisible ? prev : firstVisible));
   });
   React.useEffect(() => {
     if (!isFocused) setVisibleId(null);
@@ -391,6 +396,11 @@ const Uclips = () => {
           showsVerticalScrollIndicator={false}
           snapToAlignment='start'
           decelerationRate='fast'
+          initialNumToRender={3}
+          maxToRenderPerBatch={3}
+          windowSize={4}
+          updateCellsBatchingPeriod={50}
+          removeClippedSubviews={true}
           viewabilityConfig={viewabilityConfig.current}
           onViewableItemsChanged={onViewableItemsChanged.current}
           onEndReached={() => {

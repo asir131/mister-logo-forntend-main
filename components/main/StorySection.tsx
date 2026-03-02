@@ -7,7 +7,7 @@ import useLanguageStore from '@/store/language.store';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { FlatList, Text, TouchableOpacity, View } from 'react-native';
 
 export interface Story {
@@ -209,18 +209,24 @@ const StorySection = () => {
       ...groupedStories,
     ];
   }, [ucuts, ui.add, ui.user, user?.id, myProfileImageUrl, isMyProfileLoading]);
+  const renderStoryItem = useCallback(
+    ({ item }: { item: Story }) => <StoryCard story={item} createLabel={ui.create} />,
+    [ui.create]
+  );
 
   return (
     <View className='mt-6 mb-2'>
       <FlatList
         data={stories}
-        renderItem={({ item }) => (
-          <StoryCard story={item} createLabel={ui.create} />
-        )}
+        renderItem={renderStoryItem}
         keyExtractor={item => item.id}
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 0 }}
+        initialNumToRender={4}
+        maxToRenderPerBatch={4}
+        windowSize={4}
+        removeClippedSubviews={true}
       />
     </View>
   );

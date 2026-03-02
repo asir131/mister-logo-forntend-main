@@ -12,6 +12,7 @@ import Feather from '@expo/vector-icons/Feather';
 import Foundation from '@expo/vector-icons/Foundation';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
+import * as Linking from 'expo-linking';
 import { router } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useState } from 'react';
@@ -78,6 +79,12 @@ const Profiles = () => {
   });
   const tx = (i: number, fallback: string) =>
     t?.translations?.[i] || fallback;
+  const normalizeLink = (value?: string) => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    return `https://${raw}`;
+  };
 
   const {
     data,
@@ -88,6 +95,7 @@ const Profiles = () => {
   // @ts-ignore
   const profile = data?.profile;
   const bioValue = profile?.bio?.trim();
+  const businessLink = normalizeLink(profile?.businessLink);
   const { data: translatedBio } = useTranslateTexts({
     texts: [bioValue || ''],
     targetLang: language,
@@ -209,6 +217,16 @@ const Profiles = () => {
                   ? translatedBio?.translations?.[0] || bioValue
                   : tx(19, 'No bio yet')}
               </Text>
+              {businessLink ? (
+                <TouchableOpacity
+                  className='mt-2'
+                  onPress={() => Linking.openURL(businessLink)}
+                >
+                  <Text className='font-roboto-medium text-blue-600 dark:text-blue-300'>
+                    Buseness Link: {businessLink}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
 
             {/* border */}

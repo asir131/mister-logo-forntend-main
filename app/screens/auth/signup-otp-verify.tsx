@@ -60,13 +60,13 @@ const OTPVerification = () => {
             //@ts-ignore
             token: data?.token,
             //@ts-ignore
-            email: data?.user.email,
+            email: data?.user?.email || '',
             //@ts-ignore
-            name: data?.user.name,
+            name: data?.user?.name || '',
             //@ts-ignore
-            phoneNumber: data?.user.phoneNumber,
+            phoneNumber: data?.user?.phoneNumber || '',
             //@ts-ignore
-            id: data?.user.id,
+            id: data?.user?.id || '',
           };
           setUser(user);
 
