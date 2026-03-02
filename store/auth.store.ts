@@ -18,10 +18,12 @@ type AuthStore = {
   user: TUser | null;
   resetToken: string | null;
   rememberMe: boolean;
+  authReady: boolean;
   setEmail: (email: string) => void;
   setUser: (user: TUser) => void;
   setRememberPreference: (remember: boolean) => void;
   setResetToken: (token: string) => void;
+  setAuthReady: (ready: boolean) => void;
   clearAuth: () => void;
 };
 
@@ -54,16 +56,23 @@ const useAuthStore = create<AuthStore>()(
       user: null,
       resetToken: null,
       rememberMe: false,
+      authReady: false,
       setEmail: (email: string) => set({ email }),
       setUser: (user: TUser) => set({ user }),
       setRememberPreference: (remember: boolean) => set({ rememberMe: remember }),
       setResetToken: (token: string) => set({ resetToken: token }),
+      setAuthReady: (ready: boolean) => set({ authReady: ready }),
       clearAuth: () =>
         set({ email: null, user: null, resetToken: null, rememberMe: false }),
     }),
     {
       name: "auth-storage",
       storage: customStorage,
+      partialize: (state) => ({
+        email: state.email,
+        resetToken: state.resetToken,
+        rememberMe: state.rememberMe,
+      }),
     }
   )
 );

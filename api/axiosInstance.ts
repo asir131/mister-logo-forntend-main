@@ -1,5 +1,6 @@
 import { isAuthError } from '@/lib/error';
 import useAuthStore, { getAuth } from '@/store/auth.store';
+import { clearTokens, saveTokens } from '@/services/authSession';
 import axios from 'axios';
 import { router } from 'expo-router';
 import Toast from 'react-native-toast-message';
@@ -61,6 +62,8 @@ api.interceptors.response.use(
   async error => {
     const status = error.response?.status;
     const authError = isAuthError(error);
+    const requestMethod = String(error?.config?.method || 'get').toUpperCase();
+    const requestUrl = String(error?.config?.url || '');
 
     const showLoginToastOnce = () => {
       const now = Date.now();
@@ -76,7 +79,12 @@ api.interceptors.response.use(
     if (!authError) {
       console.log(
         'API Error:',
-        error?.response?.data || getErrorMessage(error)
+        {
+          method: requestMethod,
+          url: requestUrl,
+          status,
+          error: error?.response?.data || getErrorMessage(error),
+        }
       );
     }
 
@@ -94,6 +102,7 @@ api.interceptors.response.use(
         // Only force-redirect if a logged-in session actually existed.
         // If already logged out, avoid repeated login-route refresh loops.
         if (hasAccessToken && canRedirectNow) {
+          await clearTokens();
           useAuthStore.getState().clearAuth();
           showLoginToastOnce();
           authRedirectLockUntil = now + 10000;
@@ -125,6 +134,7 @@ api.interceptors.response.use(
 
         if (newToken) {
           const current = getAuth().user;
+          const rememberMe = Boolean(getAuth().rememberMe);
           const mergedUser = {
             ...(current || {}),
             ...(user || {}),
@@ -132,6 +142,7 @@ api.interceptors.response.use(
             refreshToken: newRefresh,
           };
           useAuthStore.getState().setUser(mergedUser as any);
+          await saveTokens(newToken, newRefresh, rememberMe);
           originalRequest.headers = originalRequest.headers || {};
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
           return api(originalRequest);
@@ -143,6 +154,7 @@ api.interceptors.response.use(
       }
 
       if (hasAccessToken && canRedirectNow) {
+        await clearTokens();
         useAuthStore.getState().clearAuth();
         showLoginToastOnce();
         authRedirectLockUntil = Date.now() + 10000;

@@ -1,11 +1,11 @@
 import BackButton from '@/components/button/BackButton';
 import { ToggleButton } from '@/components/button/ToggleButton';
 import GradientBackground from '@/components/main/GradientBackground';
-import useAuthStore from '@/store/auth.store';
 import useThemeStore from '@/store/theme.store';
 import { useUpdateProfileLanguage } from '@/hooks/app/profile';
 import { useDeleteMyAccount } from '@/hooks/app/auth';
 import { signOutCurrentUser } from '@/services/socialAuth';
+import { logout } from '@/services/authSession';
 import useLanguageStore from '@/store/language.store';
 import { useTranslateTexts } from '@/hooks/app/translate';
 import Entypo from '@expo/vector-icons/Entypo';
@@ -33,7 +33,6 @@ function normalizeLanguage(input: any) {
 }
 
 const Settings = () => {
-  const { clearAuth } = useAuthStore();
   const { mode, setMode } = useThemeStore();
   const isLight = mode === 'light';
   const iconColor = isLight ? 'black' : 'white';
@@ -131,7 +130,7 @@ const Settings = () => {
       } catch (error) {
         console.log('Sign out warning:', error);
       }
-      clearAuth();
+      await logout();
       closeDeleteModal();
       router.replace('/(auth)/login');
     } catch {
@@ -145,7 +144,7 @@ const Settings = () => {
     } catch (error) {
       console.log('Sign out warning:', error);
     } finally {
-      clearAuth();
+      await logout();
       router.replace('/(auth)/login');
     }
   };
@@ -532,8 +531,6 @@ const Settings = () => {
 };
 
 export default Settings;
-
-
 
 
 

@@ -32,6 +32,8 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
+  GestureResponderEvent,
+  LayoutChangeEvent,
   Linking,
   Modal,
   Platform,
@@ -135,6 +137,11 @@ const PostCard = ({
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [showShareModal, setShowShareModal] = useState(false);
+  const [isVideoPaused, setIsVideoPaused] = useState(false);
+  const [isVideoMuted, setIsVideoMuted] = useState(true);
+  const [videoCurrentSec, setVideoCurrentSec] = useState(0);
+  const [videoDurationSec, setVideoDurationSec] = useState(0);
+  const [videoProgressWidth, setVideoProgressWidth] = useState(0);
   const isCardActive = isVisible !== false;
 
   const {
@@ -157,10 +164,9 @@ const PostCard = ({
       ? toPlayableVideoUrl(rawMediaUrl)
       : rawMediaUrl
     : '';
-  const shouldInitPlayer = shouldUsePlayer && isCardActive;
 
   // Video player setup
-  const player = useVideoPlayer(shouldInitPlayer ? mediaPlaybackUrl : '', player => {
+  const player = useVideoPlayer(mediaPlaybackUrl, player => {
     player.loop = true;
   });
 
@@ -189,6 +195,13 @@ const PostCard = ({
       setIsFollowing(post.viewerIsFollowing);
       setIsLiked(post.viewerHasLiked);
       setLikeCount(post.likeCount);
+      setIsVideoPaused(false);
+      setIsVideoMuted(true);
+      if (post.mediaType === 'video') {
+        (player as any).muted = true;
+        setVideoCurrentSec(0);
+        setVideoDurationSec(0);
+      }
       // @ts-ignore
       setIsBookmarked(post.viewerHasBookmarked || false);
     }
@@ -197,6 +210,7 @@ const PostCard = ({
     post?.viewerIsFollowing,
     post?.viewerHasLiked,
     post?.likeCount,
+    player,
     // @ts-ignore
     post?.viewerHasBookmarked,
   ]);
@@ -204,18 +218,73 @@ const PostCard = ({
   useEffect(() => {
     if (!shouldUsePlayer) return;
     if (isVisible === undefined) return;
+
     if (post?.mediaType === 'video') {
-      if (isVisible) {
-        player.play();
-      } else {
+      if (!isVisible) {
         player.pause();
+        return;
+      }
+      if (isVideoPaused) {
+        player.pause();
+      } else {
+        player.play();
       }
       return;
     }
+
     if (post?.mediaType === 'audio' && !isVisible) {
       player.pause();
     }
-  }, [isVisible, post?.mediaType, player, shouldUsePlayer]);
+  }, [isVisible, post?.mediaType, player, shouldUsePlayer, isVideoPaused]);
+
+  useEffect(() => {
+    if (post?.mediaType !== 'video') return;
+    (player as any).muted = isVideoMuted;
+  }, [post?.mediaType, player, isVideoMuted]);
+
+  useEffect(() => {
+    if (post?.mediaType !== 'video') return;
+    const timer = setInterval(() => {
+      const duration = Number((player as any)?.duration || 0);
+      const currentTime = Number((player as any)?.currentTime || 0);
+      if (Number.isFinite(duration) && duration >= 0) {
+        setVideoDurationSec(duration);
+      }
+      if (Number.isFinite(currentTime) && currentTime >= 0) {
+        setVideoCurrentSec(currentTime);
+      }
+    }, 300);
+
+    return () => clearInterval(timer);
+  }, [post?.mediaType, player]);
+
+  const toggleVideoPlayback = () => {
+    setIsVideoPaused((prev) => !prev);
+  };
+
+  const toggleVideoMute = () => {
+    setIsVideoMuted((prev) => !prev);
+  };
+
+  const formatVideoTime = (seconds: number) => {
+    const safe = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
+    const m = Math.floor(safe / 60);
+    const s = safe % 60;
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  const handleProgressLayout = (event: LayoutChangeEvent) => {
+    const width = event.nativeEvent.layout.width || 0;
+    if (width > 0) setVideoProgressWidth(width);
+  };
+
+  const handleSeekPress = (event: GestureResponderEvent) => {
+    if (!videoDurationSec || !videoProgressWidth) return;
+    const x = event.nativeEvent.locationX || 0;
+    const clamped = Math.max(0, Math.min(videoProgressWidth, x));
+    const ratio = clamped / videoProgressWidth;
+    (player as any).currentTime = ratio * videoDurationSec;
+  };
 
   const handleLikeToggle = () => {
     if (!post?._id) return;
@@ -1163,12 +1232,64 @@ const PostCard = ({
         )}
 
         {post?.mediaType === 'video' && mediaPlaybackUrl && (
-          <VideoView
-            style={{ width: '100%', height: 345 }}
-            player={player}
-            nativeControls={false}
-            contentFit='cover'
-          />
+          <View style={{ width: '100%', height: 345 }}>
+            <VideoView
+              style={{ width: '100%', height: 345 }}
+              player={player}
+              nativeControls={false}
+              contentFit='cover'
+            />
+            <TouchableOpacity
+              onPress={toggleVideoPlayback}
+              activeOpacity={0.85}
+              className='absolute inset-0 items-center justify-center'
+            >
+              <View className='w-14 h-14 rounded-full bg-black/55 items-center justify-center'>
+                <Ionicons
+                  name={isVideoPaused ? 'play' : 'pause'}
+                  size={26}
+                  color='white'
+                />
+              </View>
+            </TouchableOpacity>
+            <View className='absolute right-3 top-3'>
+              <TouchableOpacity
+                onPress={toggleVideoMute}
+                className='w-10 h-10 rounded-full bg-black/60 items-center justify-center'
+              >
+                <Ionicons
+                  name={isVideoMuted ? 'volume-mute' : 'volume-high'}
+                  size={20}
+                  color='white'
+                />
+              </TouchableOpacity>
+            </View>
+            <View className='absolute left-3 right-3 bottom-3'>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={handleSeekPress}
+                onLayout={handleProgressLayout}
+                className='h-1.5 rounded-full bg-white/35 overflow-hidden'
+              >
+                <View
+                  className='h-full bg-white'
+                  style={{
+                    width: `${videoDurationSec > 0
+                      ? Math.min(100, Math.max(0, (videoCurrentSec / videoDurationSec) * 100))
+                      : 0}%`,
+                  }}
+                />
+              </TouchableOpacity>
+              <View className='mt-1 flex-row justify-between'>
+                <Text className='text-white text-xs font-roboto-medium'>
+                  {formatVideoTime(videoCurrentSec)}
+                </Text>
+                <Text className='text-white text-xs font-roboto-medium'>
+                  {formatVideoTime(videoDurationSec)}
+                </Text>
+              </View>
+            </View>
+          </View>
         )}
 
         {post?.mediaType === 'audio' && post?.mediaUrl && (

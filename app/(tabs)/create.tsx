@@ -264,6 +264,24 @@ const CreatePost = () => {
   };
 
   const BIG_VIDEO_BYTES = 50 * 1024 * 1024;
+  const CLOUDINARY_DIRECT_MAX_BYTES = 100 * 1024 * 1024;
+
+  const resolveVideoSizeBytes = async (
+    uri: string | null,
+    fallbackSize: number | null
+  ): Promise<number | null> => {
+    if (typeof fallbackSize === 'number' && fallbackSize > 0) {
+      return fallbackSize;
+    }
+    if (!uri) return null;
+    try {
+      const info: any = await FileSystem.getInfoAsync(uri, { size: true } as any);
+      const bytes = typeof info?.size === 'number' ? info.size : null;
+      return bytes && bytes > 0 ? bytes : null;
+    } catch {
+      return null;
+    }
+  };
 
   const buildShareTargets = (skipInstagram = false) => {
     const targets: string[] = [];
@@ -374,7 +392,7 @@ const CreatePost = () => {
         resetCreateForm();
         alert(tx(46, 'UCuts') + ' created successfully!');
         setMode('selection');
-      } catch (error) {
+      } catch {
         // Toast is handled inside useCreateUCuts
       }
       return;
@@ -406,8 +424,24 @@ const CreatePost = () => {
       } as any);
       formData.append('mediaType', 'image');
     } else if (video && !isRemote(video)) {
-      if (videoSize && videoSize > BIG_VIDEO_BYTES) {
+      const effectiveVideoSize = await resolveVideoSizeBytes(
+        videoPlayerUri || video,
+        videoSize
+      );
+
+      const shouldUseCloudinaryDirect =
+        !isEditMode &&
+        effectiveVideoSize !== null &&
+        effectiveVideoSize > BIG_VIDEO_BYTES &&
+        effectiveVideoSize <= CLOUDINARY_DIRECT_MAX_BYTES;
+
+      if (shouldUseCloudinaryDirect) {
         try {
+          console.log('[create] Uploading video via Cloudinary', {
+            size: effectiveVideoSize,
+            threshold: BIG_VIDEO_BYTES,
+            maxDirect: CLOUDINARY_DIRECT_MAX_BYTES,
+          });
           setUploadProgress(0);
           const signatureData = await requestSignature({
             folder: 'mister/posts',
@@ -484,6 +518,13 @@ const CreatePost = () => {
           setUploadProgress(null);
           return;
         }
+      }
+
+      if (!isEditMode && (effectiveVideoSize === null || effectiveVideoSize > CLOUDINARY_DIRECT_MAX_BYTES)) {
+        console.log('[create] Using backend upload (auto-compress if needed)', {
+          size: effectiveVideoSize,
+          maxDirect: CLOUDINARY_DIRECT_MAX_BYTES,
+        });
       }
 
       const filename = video.split('/').pop() || 'video.mp4';
@@ -664,12 +705,15 @@ const pickVideo = async () => {
     const picked = result.assets[0];
     const rawUri = picked.uri;
     const pickedName = picked.fileName ?? null;
-    const pickedSize = picked.fileSize ?? null;
     const previewUri = await resolveVideoPreviewUri(rawUri, pickedName);
+    const resolvedSize = await resolveVideoSizeBytes(
+      previewUri || rawUri,
+      picked.fileSize ?? null
+    );
 
     setVideo(rawUri);
     setVideoPlayerUri(previewUri);
-    setVideoSize(pickedSize);
+    setVideoSize(resolvedSize);
     setVideoName(pickedName);
   } catch (error) {
     console.error('[pickVideo] Error:', error);

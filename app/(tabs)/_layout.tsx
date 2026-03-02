@@ -1,5 +1,6 @@
 import { Tabs, router } from 'expo-router';
-import React from 'react';
+import React, { useEffect } from 'react';
+import useAuthStore from '@/store/auth.store';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { useTranslateTexts } from '@/hooks/app/translate';
@@ -15,6 +16,7 @@ import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabLayout() {
+  const { user, authReady } = useAuthStore();
   const { mode } = useThemeStore();
   const isLight = mode === 'light';
   const { language } = useLanguageStore();
@@ -30,6 +32,17 @@ export default function TabLayout() {
   });
   const tx = (i: number, fallback: string) =>
     t?.translations?.[i] || fallback;
+
+  useEffect(() => {
+    if (!authReady) return;
+    if (!user?.token) {
+      router.replace('/(auth)/login');
+    }
+  }, [authReady, user?.token]);
+
+  if (!authReady || !user?.token) {
+    return null;
+  }
 
   return (
     <Tabs

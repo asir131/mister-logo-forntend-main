@@ -95,7 +95,7 @@ const StoryItem = ({
   const uiTexts = (index: number, fallback: string) =>
     translatedUI?.translations?.[index] || fallback;
   const player = useVideoPlayer(
-    item.mediaType === 'video' && isStoryActive ? item.storyImage : '',
+    item.mediaType === 'video' ? item.storyImage : '',
     mediaTypePlayer => {
       if (item.mediaType === 'video') {
         mediaTypePlayer.loop = true;

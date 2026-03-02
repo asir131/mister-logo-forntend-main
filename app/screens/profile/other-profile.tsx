@@ -8,6 +8,7 @@ import useAuthStore from '@/store/auth.store';
 import useLanguageStore from '@/store/language.store';
 import useThemeStore from '@/store/theme.store';
 import Feather from '@expo/vector-icons/Feather';
+import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import Foundation from '@expo/vector-icons/Foundation';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
@@ -118,6 +119,84 @@ const OtherProfile = () => {
     return `https://${raw}`;
   };
   const businessLink = normalizeLink(profile?.businessLink);
+  const extractHandle = (url: string, marker: string) => {
+    const idx = url.indexOf(marker);
+    if (idx < 0) return '';
+    const tail = url.slice(idx + marker.length);
+    const first = tail.split('/')[0]?.split('?')[0]?.split('#')[0] || '';
+    return first.replace(/^@/, '').trim();
+  };
+  const openSocialLink = async (webUrl: string, appUrl?: string) => {
+    try {
+      if (appUrl) {
+        const canOpen = await Linking.canOpenURL(appUrl);
+        if (canOpen) {
+          await Linking.openURL(appUrl);
+          return;
+        }
+      }
+      await Linking.openURL(webUrl);
+    } catch (error) {
+      console.log('[other-profile] failed to open social link', { webUrl, appUrl, error });
+    }
+  };
+  const instagramUrl = normalizeLink(profile?.instagramUrl);
+  const facebookUrl = normalizeLink(profile?.facebookUrl);
+  const twitterUrl = normalizeLink(profile?.twitterUrl);
+  const tiktokUrl = normalizeLink(profile?.tiktokUrl);
+  const snapchatUrl = normalizeLink(profile?.snapchatUrl);
+  const instagramHandle = extractHandle(instagramUrl, 'instagram.com/');
+  const twitterHandle =
+    extractHandle(twitterUrl, 'x.com/') || extractHandle(twitterUrl, 'twitter.com/');
+  const tiktokHandle = extractHandle(tiktokUrl, 'tiktok.com/');
+  const snapchatHandle = extractHandle(snapchatUrl, 'snapchat.com/add/');
+  const socialLinks = [
+    {
+      key: 'facebook',
+      label: 'Facebook',
+      url: facebookUrl,
+      icon: 'facebook-f' as const,
+      appUrl: facebookUrl
+        ? `fb://facewebmodal/f?href=${encodeURIComponent(facebookUrl)}`
+        : undefined,
+    },
+    {
+      key: 'instagram',
+      label: 'Instagram',
+      url: instagramUrl,
+      icon: 'instagram' as const,
+      appUrl: instagramHandle
+        ? `instagram://user?username=${encodeURIComponent(instagramHandle)}`
+        : undefined,
+    },
+    {
+      key: 'twitter',
+      label: 'Twitter/X',
+      url: twitterUrl,
+      icon: 'twitter' as const,
+      appUrl: twitterHandle
+        ? `twitter://user?screen_name=${encodeURIComponent(twitterHandle)}`
+        : undefined,
+    },
+    {
+      key: 'tiktok',
+      label: 'TikTok',
+      url: tiktokUrl,
+      icon: 'tiktok' as const,
+      appUrl: tiktokHandle
+        ? `snssdk1233://user/profile/${encodeURIComponent(tiktokHandle)}`
+        : undefined,
+    },
+    {
+      key: 'snapchat',
+      label: 'Snapchat',
+      url: snapchatUrl,
+      icon: 'snapchat-ghost' as const,
+      appUrl: snapchatHandle
+        ? `snapchat://add/${encodeURIComponent(snapchatHandle)}`
+        : undefined,
+    },
+  ].filter(item => !!item.url);
   const { data: translatedBio } = useTranslateTexts({
     texts: [bioValue || ''],
     targetLang: language,
@@ -252,6 +331,24 @@ const OtherProfile = () => {
                     Buseness Link: {businessLink}
                   </Text>
                 </TouchableOpacity>
+              ) : null}
+              {socialLinks.length > 0 ? (
+                <View className='mt-3 flex-row flex-wrap gap-2'>
+                  {socialLinks.map(item => (
+                    <TouchableOpacity
+                      key={item.key}
+                      onPress={() => openSocialLink(item.url, item.appUrl)}
+                      className='h-10 w-10 items-center justify-center rounded-full bg-[#F0F2F5] dark:bg-[#FFFFFF0D] border border-black/10 dark:border-[#FFFFFF22]'
+                    >
+                      <FontAwesome5
+                        name={item.icon}
+                        size={18}
+                        color={isLight ? '#111827' : '#F3F4F6'}
+                        brand
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </View>
               ) : null}
             </View>
 

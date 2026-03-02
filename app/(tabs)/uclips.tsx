@@ -133,7 +133,7 @@ const UclipItem = ({ item, isVisible }: { item: UclipPost; isVisible: boolean })
     [item.mediaUrl]
   );
 
-  const player = useVideoPlayer(isVisible ? playbackUrl : '', p => {
+  const player = useVideoPlayer(playbackUrl, p => {
     p.loop = true;
   });
 

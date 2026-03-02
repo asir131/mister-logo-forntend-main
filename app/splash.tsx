@@ -7,21 +7,23 @@ import React, { useEffect } from 'react';
 import { View } from 'react-native';
 
 const SplashScreen = () => {
-  const { user } = useAuthStore();
+  const { user, authReady } = useAuthStore();
   const { mode } = useThemeStore();
   const isLight = mode === 'light';
-  // replesh to welcome screen after 2 seconds
+
   useEffect(() => {
+    if (!authReady) return;
+
     const timer = setTimeout(() => {
       if (user?.token) {
         router.replace('/(tabs)/trending');
       } else {
-        router.replace('/screens/auth/welcome');
+        router.replace('/(auth)/login');
       }
-    }, 1000);
+    }, 500);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [authReady, user?.token]);
 
   return (
     <GradientBackground className='justify-center items-center'>

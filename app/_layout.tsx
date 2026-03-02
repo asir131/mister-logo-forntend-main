@@ -29,6 +29,7 @@ import './global.css';
 
 import useAuthStore from '@/store/auth.store';
 import useThemeStore from '@/store/theme.store';
+import { bootstrapAuth } from '@/services/authSession';
 import { useColorScheme as useNWColorScheme } from 'nativewind';
 import { useEffect, useRef, useState } from 'react';
 
@@ -86,6 +87,12 @@ const RootLayout = () => {
   useEffect(() => {
     setColorScheme(mode);
   }, [mode, setColorScheme]);
+
+  useEffect(() => {
+    bootstrapAuth().catch(error => {
+      console.log('[auth] bootstrap failed:', error);
+    });
+  }, []);
 
   useEffect(() => {
     if (!notifications) return;

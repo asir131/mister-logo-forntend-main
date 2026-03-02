@@ -12,13 +12,14 @@ import {
   signInWithGoogle,
   signInWithInstagram,
 } from '@/services/socialAuth';
+import { saveTokens } from '@/services/authSession';
 import useAuthStore from '@/store/auth.store';
 import useLanguageStore from '@/store/language.store';
 import useThemeStore from '@/store/theme.store';
 import Feather from '@expo/vector-icons/Feather';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -138,6 +139,25 @@ const Login = () => {
     instagram: signInWithInstagram,
   };
 
+  const finalizeLoginSession = useCallback(
+    async (authUser: any, remember: boolean) => {
+      const normalizedUser = {
+        ...authUser,
+        refreshToken: remember ? authUser?.refreshToken || null : null,
+      };
+
+      await saveTokens(
+        normalizedUser?.token || null,
+        authUser?.refreshToken || null,
+        remember
+      );
+
+      setUser(normalizedUser);
+      setRememberPreference(remember);
+    },
+    [setRememberPreference, setUser]
+  );
+
   useEffect(() => {
     const unsubscribe = observeAuthState(async firebaseUser => {
       if (!firebaseUser) return;
@@ -151,8 +171,7 @@ const Login = () => {
           JSON.stringify(buildFlatFirebaseLog(firebaseUser, authUser), null, 2)
         );
         logPretty('[Login][observeAuthState][backend] =>', authUser);
-        setUser(authUser as any);
-        setRememberPreference(true);
+        await finalizeLoginSession(authUser as any, true);
         if (isFirstLogin || needsProfileCompletion) {
           router.replace('/screens/profile/complete-profile');
         } else {
@@ -166,7 +185,7 @@ const Login = () => {
     return () => {
       unsubscribe?.();
     };
-  }, [setRememberPreference, setUser, user?.id, user?.token]);
+  }, [finalizeLoginSession, user?.id, user?.token]);
 
   const handleSocialLogin = async (provider: ProviderKey) => {
     if (socialLoading) return;
@@ -182,7 +201,7 @@ const Login = () => {
         const isFirstLogin = Boolean(result?.isFirstLogin);
         const needsProfileCompletion = Boolean(result?.needsProfileCompletion);
         logPretty('[Login][social][backend] =>', authUser);
-        setUser(authUser as any);
+        await finalizeLoginSession(authUser as any, true);
 
         Toast.show({
           type: 'success',
@@ -214,7 +233,7 @@ const Login = () => {
         JSON.stringify(buildFlatFirebaseLog(firebaseUser, authUser), null, 2)
       );
       logPretty('[Login][social][backend] =>', authUser);
-      setUser(authUser as any);
+      await finalizeLoginSession(authUser as any, true);
 
       Toast.show({
         type: 'success',
@@ -250,7 +269,7 @@ const Login = () => {
     };
 
     mutate(user, {
-      onSuccess: data => {
+      onSuccess: async data => {
         console.log('[Login][email-password] API response:', {
           user: data?.user || null,
           token: data?.token ? `${String(data.token).slice(0, 20)}...` : null,
@@ -285,9 +304,8 @@ const Login = () => {
             ? `${String(user.refreshToken).slice(0, 20)}...`
             : null,
         });
-        setUser(user);
-        setRememberPreference(rememberMe);
-        router.push('/(tabs)/trending');
+        await finalizeLoginSession(user, rememberMe);
+        router.replace('/(tabs)/trending');
       },
       onError: error => {
         Toast.show({

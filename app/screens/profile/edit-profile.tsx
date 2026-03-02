@@ -42,6 +42,10 @@ const EditProfile = () => {
   const [showDobPicker, setShowDobPicker] = useState(false);
   const [bio, setBio] = useState('');
   const [instagram, setInstagram] = useState('');
+  const [facebook, setFacebook] = useState('');
+  const [twitter, setTwitter] = useState('');
+  const [tiktok, setTiktok] = useState('');
+  const [snapchat, setSnapchat] = useState('');
   const [youtube, setYoutube] = useState('');
   const [spotify, setSpotify] = useState('');
   const [businessLink, setBusinessLink] = useState('');
@@ -217,6 +221,10 @@ const EditProfile = () => {
         }
       }
       setInstagram(profile.instagramUrl || '');
+      setFacebook(profile.facebookUrl || '');
+      setTwitter(profile.twitterUrl || '');
+      setTiktok(profile.tiktokUrl || '');
+      setSnapchat(profile.snapchatUrl || '');
       setYoutube(profile.youtubeUrl || '');
       setSpotify(profile.spotifyArtistUrl || '');
       setBusinessLink(profile.businessLink || '');
@@ -245,6 +253,18 @@ const EditProfile = () => {
     }
     if (platform === 'youtube' && !cleanUrl.includes('.')) {
       return `https://youtube.com/@${cleanUrl}`;
+    }
+    if (platform === 'facebook' && !cleanUrl.includes('.')) {
+      return `https://facebook.com/${cleanUrl}`;
+    }
+    if (platform === 'twitter' && !cleanUrl.includes('.')) {
+      return `https://x.com/${cleanUrl}`;
+    }
+    if (platform === 'tiktok' && !cleanUrl.includes('.')) {
+      return `https://tiktok.com/@${cleanUrl}`;
+    }
+    if (platform === 'snapchat' && !cleanUrl.includes('.')) {
+      return `https://snapchat.com/add/${cleanUrl}`;
     }
     if (platform === 'spotify' && !cleanUrl.includes('.')) {
       return `https://open.spotify.com/artist/${cleanUrl}`;
@@ -310,13 +330,13 @@ const EditProfile = () => {
 
       // Format URLs properly
       formData.append('instagramUrl', formatUrl(instagram, 'instagram'));
+      formData.append('facebookUrl', formatUrl(facebook, 'facebook'));
+      formData.append('twitterUrl', formatUrl(twitter, 'twitter'));
+      formData.append('tiktokUrl', formatUrl(tiktok, 'tiktok'));
+      formData.append('snapchatUrl', formatUrl(snapchat, 'snapchat'));
       formData.append('youtubeUrl', formatUrl(youtube, 'youtube'));
       formData.append('spotifyArtistUrl', formatUrl(spotify, 'spotify'));
       formData.append('businessLink', formatUrl(businessLink));
-
-      // optional socials (as per postman image)
-      formData.append('tiktokUrl', '');
-      formData.append('facebookUrl', '');
 
       updateProfile(formData, {
         onSuccess: (data: any) => {
@@ -515,8 +535,53 @@ const EditProfile = () => {
                 type='url'
               />
 
+              <Text className='text-primary dark:text-white mt-3'>Instagram Link</Text>
+              <Input
+                className='mt-2'
+                placeholder='https://instagram.com/username'
+                value={instagram}
+                onChangeText={setInstagram}
+                type='url'
+              />
+
+              <Text className='text-primary dark:text-white mt-3'>Facebook Link</Text>
+              <Input
+                className='mt-2'
+                placeholder='https://facebook.com/username'
+                value={facebook}
+                onChangeText={setFacebook}
+                type='url'
+              />
+
+              <Text className='text-primary dark:text-white mt-3'>Twitter/X Link</Text>
+              <Input
+                className='mt-2'
+                placeholder='https://x.com/username'
+                value={twitter}
+                onChangeText={setTwitter}
+                type='url'
+              />
+
+              <Text className='text-primary dark:text-white mt-3'>TikTok Link</Text>
+              <Input
+                className='mt-2'
+                placeholder='https://tiktok.com/@username'
+                value={tiktok}
+                onChangeText={setTiktok}
+                type='url'
+              />
+
+              <Text className='text-primary dark:text-white mt-3'>Snapchat Link</Text>
+              <Input
+                className='mt-2'
+                placeholder='https://snapchat.com/add/username'
+                value={snapchat}
+                onChangeText={setSnapchat}
+                type='url'
+              />
+
               {/* Social Accounts Status */}
-              <View className='mt-6 rounded-2xl bg-[#F0F2F5] dark:bg-[#FFFFFF0D] p-4 border border-black/10 dark:border-[#FFFFFF0D]'>
+              {/* <View className='mt-6 rounded-2xl bg-[#F0F2F5] dark:bg-[#FFFFFF0D] p-4 border border-black/10 dark:border-[#FFFFFF0D]'>
                 <Text className='text-primary dark:text-white font-roboto-semibold text-base mb-3'>
                   {tx(15, 'Social Accounts')}
                 </Text>
@@ -573,7 +638,7 @@ const EditProfile = () => {
                     </View>
                   );
                 })}
-              </View>
+              </View> */}
             </View>
 
             <View className='pb-5'>

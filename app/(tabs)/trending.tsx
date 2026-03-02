@@ -519,8 +519,7 @@ const TrendingScreen = () => {
     const shouldUsePlayer = mediaType === 'video' || mediaType === 'audio';
     const mediaPlaybackUrl =
       mediaType === 'video' ? toPlayableVideoUrl(mediaUrlRaw) : mediaUrlRaw;
-    const shouldInitPlayer = shouldUsePlayer && isVisible && isFocused;
-    const player = useVideoPlayer(shouldInitPlayer ? mediaPlaybackUrl : '', p => {
+    const player = useVideoPlayer(shouldUsePlayer ? mediaPlaybackUrl : '', p => {
       p.loop = true;
     });
 
