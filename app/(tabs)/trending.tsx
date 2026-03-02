@@ -132,7 +132,7 @@ const TrendingScreen = () => {
     hasNextPage,
     isFetchingNextPage,
   } = useGetTrendingPost(selectedTab, {
-    enabled: !!user?.token,
+    enabled: !!user?.token && selectedTab !== 'active',
     search: querySearch,
   });
 
@@ -154,12 +154,7 @@ const TrendingScreen = () => {
     isLoading: isEligibilityLoading,
     refetch: refetchEligibility,
   } = useGetUblastEligibility({ enabled: !!user?.token });
-  const {
-    data: myPostsData,
-    fetchNextPage: fetchNextMyPosts,
-    hasNextPage: hasNextMyPosts,
-    isFetchingNextPage: isFetchingNextMyPosts,
-  } = useGetMyPostsInfinite({
+  const { data: myPostsData } = useGetMyPostsInfinite({
     enabled: !!user?.token && selectedTab === 'active',
     limit: 20,
   });
@@ -193,10 +188,8 @@ const TrendingScreen = () => {
   );
   const activeUblastsRaw = useMemo(
     () =>
-      activeData?.pages?.flatMap((page: any) => page?.ublasts || []) ||
-      data?.pages?.flatMap((page: any) => page?.active || []) ||
-      [],
-    [activeData, data]
+      activeData?.pages?.flatMap((page: any) => page?.ublasts || []) || [],
+    [activeData]
   );
   const activeUblasts = useMemo(() => {
     const seen = new Set<string>();
@@ -315,12 +308,7 @@ const TrendingScreen = () => {
     });
   }, [activeUblasts, sharedByUblastId, normalizedSearch, isSearchMatch]);
 
-  const [activeTrendingId, setActiveTrendingId] = useState<string | null>(null);
-  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 });
-  const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
-    const firstVisibleId = String(viewableItems?.[0]?.item?._id || '') || null;
-    setActiveTrendingId(prev => (prev === firstVisibleId ? prev : firstVisibleId));
-  });
+  const endReachedLockedRef = useRef(false);
 
   const renderHeader = () => (
     <View>
@@ -969,7 +957,7 @@ const TrendingScreen = () => {
                       post={sharedPost}
                       currentUserId={user?.id}
                       className='mt-4 mx-5'
-                      isVisible={isFocused && activeTrendingId === sharedPost._id}
+                      isVisible={isFocused}
                       disableShare={
                         !isEligible &&
                         (Boolean((sharedPost as any)?.ublastId) ||
@@ -982,7 +970,7 @@ const TrendingScreen = () => {
                 return (
                   <UblastCard
                     item={item}
-                    isVisible={activeTrendingId === item._id}
+                    isVisible={isFocused}
                     isFocused={isFocused}
                   />
                 );
@@ -992,7 +980,7 @@ const TrendingScreen = () => {
                   post={item}
                   currentUserId={user?.id}
                   className='mt-4 mx-5'
-                  isVisible={isFocused && activeTrendingId === item._id}
+                  isVisible={isFocused}
                   disableShare={
                     !isEligible &&
                     (Boolean((item as any)?.ublastId) ||
@@ -1009,8 +997,6 @@ const TrendingScreen = () => {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps='always'
             keyboardDismissMode='none'
-            viewabilityConfig={viewabilityConfig.current}
-            onViewableItemsChanged={onViewableItemsChanged.current}
             initialNumToRender={4}
             maxToRenderPerBatch={4}
             windowSize={5}
@@ -1024,12 +1010,11 @@ const TrendingScreen = () => {
               }
             }}
             onEndReached={() => {
+              if (endReachedLockedRef.current) return;
+              endReachedLockedRef.current = true;
               if (selectedTab === 'active') {
                 if (hasNextActive && !isFetchingNextActive) {
                   fetchNextActive();
-                }
-                if (hasNextMyPosts && !isFetchingNextMyPosts) {
-                  fetchNextMyPosts();
                 }
                 return;
               }
@@ -1038,6 +1023,9 @@ const TrendingScreen = () => {
               }
             }}
             onEndReachedThreshold={0.4}
+            onMomentumScrollBegin={() => {
+              endReachedLockedRef.current = false;
+            }}
             ListEmptyComponent={
               <View className='mt-10 items-center mx-6'>
                 <Ionicons name='file-tray-outline' size={48} color='#666' />
@@ -1051,7 +1039,7 @@ const TrendingScreen = () => {
             }
             ListFooterComponent={
               (selectedTab === 'active'
-                ? isFetchingNextActive || isFetchingNextMyPosts
+                ? isFetchingNextActive
                 : isFetchingNextPage) ? (
                 <View className='py-4 items-center'>
                   <ActivityIndicator size='small' color={isLight ? 'black' : 'white'} />

@@ -30,7 +30,7 @@ const SplashScreen = () => {
       <View className='flex-1 justify-center items-center'>
         <View
           className={`px-4 py-3 rounded-2xl ${
-            isLight ? 'bg-black/10' : 'bg-transparent'
+            'bg-black/10'
           }`}
         >
           <Image
