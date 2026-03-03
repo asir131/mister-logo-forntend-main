@@ -14,7 +14,7 @@ import useThemeStore from '@/store/theme.store';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -103,12 +103,6 @@ const Home = () => {
       return true;
     });
   }, [data]);
-  const [activePostId, setActivePostId] = useState<string | null>(null);
-  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 });
-  const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
-    const firstVisibleId = String(viewableItems?.[0]?.item?._id || '') || null;
-    setActivePostId(prev => (prev === firstVisibleId ? prev : firstVisibleId));
-  });
 
   const header = useMemo(
     () => (
@@ -181,21 +175,21 @@ const Home = () => {
               post={item}
               className='mt-4'
               currentUserId={user?.id}
-              isVisible={isFocused && activePostId === item._id}
+              isVisible={isFocused}
             />
           ) : (
             <PostCard
               post={item}
               className='mt-4'
               currentUserId={user?.id}
-              isVisible={isFocused && activePostId === item._id}
+              isVisible={isFocused}
             />
           )}
           {index === 1 ? <SuggestedArtistsCard className='mt-4' /> : null}
         </View>
       );
     },
-    [user?.id, isFocused, activePostId]
+    [user?.id, isFocused]
   );
 
   const listFooter = useMemo(() => {
@@ -254,8 +248,6 @@ const Home = () => {
             data={posts}
             renderItem={renderPost}
             keyExtractor={keyExtractor}
-            viewabilityConfig={viewabilityConfig.current}
-            onViewableItemsChanged={onViewableItemsChanged.current}
             ListHeaderComponent={header}
             ListFooterComponent={listFooter}
             onEndReached={onEndReached}

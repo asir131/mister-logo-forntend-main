@@ -94,7 +94,7 @@ export default function TabLayout() {
         listeners={{
           tabPress: e => {
             e.preventDefault();
-            router.replace({
+            router.navigate({
               pathname: '/(tabs)/create',
               params: { reset: Date.now().toString() },
             });

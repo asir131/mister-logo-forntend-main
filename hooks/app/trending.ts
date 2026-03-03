@@ -7,6 +7,7 @@ export const useGetTrendingPost = (
   selectedTab: string,
   options?: { enabled?: boolean; search?: string }
 ) => {
+  const PAGE_LIMIT = 5;
   return useInfiniteQuery({
     queryKey: ['trendingPost', selectedTab, options?.search || ''],
     queryFn: async ({ pageParam = 1 }) => {
@@ -16,11 +17,11 @@ export const useGetTrendingPost = (
           url += `&q=${encodeURIComponent(options.search.trim())}`;
         }
         if (selectedTab === 'manual') {
-          url += `&manualPage=${pageParam}&manualLimit=10`;
+          url += `&manualPage=${pageParam}&manualLimit=${PAGE_LIMIT}`;
         } else if (selectedTab === 'organic') {
-          url += `&organicPage=${pageParam}&organicLimit=10`;
+          url += `&organicPage=${pageParam}&organicLimit=${PAGE_LIMIT}`;
         } else if (selectedTab === 'items') {
-          url += `&itemsPage=${pageParam}&itemsLimit=10`;
+          url += `&itemsPage=${pageParam}&itemsLimit=${PAGE_LIMIT}`;
         }
         const res = await api.get(url);
         const data = res?.data || res;

@@ -39,6 +39,8 @@ import Toast from 'react-native-toast-message';
 import { useIsFocused } from '@react-navigation/native';
 
 type TabType = 'manual' | 'active' | 'organic';
+const TRENDING_PAGE_SIZE = 5;
+const TRENDING_MAX_WINDOW_ITEMS = TRENDING_PAGE_SIZE * 3;
 
 const toPlayableVideoUrl = (rawUrl?: string) => {
   const url = String(rawUrl || '').trim();
@@ -145,7 +147,7 @@ const TrendingScreen = () => {
     isFetchingNextPage: isFetchingNextActive,
   } = useGetActiveUblasts({
     enabled: !!user?.token && selectedTab === 'active',
-    limit: 12,
+    limit: TRENDING_PAGE_SIZE,
     search: querySearch,
   });
 
@@ -182,24 +184,30 @@ const TrendingScreen = () => {
     refetchOffers();
   }, [isFocused, selectedTab, refetchOffers]);
 
-  const trendingData = useMemo(
-    () => data?.pages?.flatMap((page: any) => page?.[selectedTab] || []) || [],
-    [data, selectedTab]
-  );
+  const trendingData = useMemo(() => {
+    const pages = data?.pages || [];
+    // Only process the most recent pages to keep list compute cheap.
+    const recentPages = pages.slice(-4);
+    return recentPages.flatMap((page: any) => page?.[selectedTab] || []);
+  }, [data, selectedTab]);
   const activeUblastsRaw = useMemo(
-    () =>
-      activeData?.pages?.flatMap((page: any) => page?.ublasts || []) || [],
+    () => {
+      const pages = activeData?.pages || [];
+      const recentPages = pages.slice(-4);
+      return recentPages.flatMap((page: any) => page?.ublasts || []);
+    },
     [activeData]
   );
   const activeUblasts = useMemo(() => {
     const seen = new Set<string>();
-    return activeUblastsRaw.filter((item: any) => {
+    const deduped = activeUblastsRaw.filter((item: any) => {
       const id = String(item?._id || '');
       if (!id) return false;
       if (seen.has(id)) return false;
       seen.add(id);
       return true;
     });
+    return deduped.slice(-TRENDING_MAX_WINDOW_ITEMS);
   }, [activeUblastsRaw]);
   const myPosts = useMemo(
     () => myPostsData?.pages?.flatMap((page: any) => page?.posts || []) || [],
@@ -238,7 +246,7 @@ const TrendingScreen = () => {
   const filteredPosts = useMemo(() => {
     if (!Array.isArray(trendingData)) return [];
     const seen = new Set<string>();
-    return trendingData
+    const deduped = trendingData
       .filter((item: any) => item)
       .map((item: any) => {
         const post = item.post || item;
@@ -268,6 +276,7 @@ const TrendingScreen = () => {
         seen.add(id);
         return true;
       });
+    return deduped.slice(-TRENDING_MAX_WINDOW_ITEMS);
   }, [trendingData]);
 
   const normalizedSearch = usernameSearch.trim().toLowerCase();
@@ -997,9 +1006,10 @@ const TrendingScreen = () => {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps='always'
             keyboardDismissMode='none'
-            initialNumToRender={4}
-            maxToRenderPerBatch={4}
-            windowSize={5}
+            initialNumToRender={3}
+            maxToRenderPerBatch={2}
+            updateCellsBatchingPeriod={100}
+            windowSize={3}
             removeClippedSubviews={true}
             refreshing={usernameSearch.trim().length > 0 ? false : selectedTab === 'active' ? isActiveLoading : isRefetching}
             onRefresh={() => {
@@ -1022,7 +1032,7 @@ const TrendingScreen = () => {
                 fetchNextPage();
               }
             }}
-            onEndReachedThreshold={0.4}
+            onEndReachedThreshold={0.25}
             onMomentumScrollBegin={() => {
               endReachedLockedRef.current = false;
             }}
