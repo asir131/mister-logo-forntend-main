@@ -1035,22 +1035,6 @@ const PostCard = ({
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    onPress={() => handleShareTarget('facebook_story')}
-                    className='py-3 px-4 rounded-xl bg-[#F0F2F5] dark:bg-white/10 mb-3'
-                  >
-                    <Text className='text-black dark:text-white font-roboto-medium'>
-                      {uiTexts(33, 'Share to Facebook Story')}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => handleShareTarget('instagram_story')}
-                    className='py-3 px-4 rounded-xl bg-[#F0F2F5] dark:bg-white/10 mb-3'
-                  >
-                    <Text className='text-black dark:text-white font-roboto-medium'>
-                      {uiTexts(34, 'Share to Instagram Story')}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
                     onPress={() => handleShareTarget('spotify')}
                     className='py-3 px-4 rounded-xl bg-[#F0F2F5] dark:bg-white/10 mb-1'
                   >
