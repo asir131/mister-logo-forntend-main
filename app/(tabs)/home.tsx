@@ -14,13 +14,16 @@ import useThemeStore from '@/store/theme.store';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   FlatList,
   KeyboardAvoidingView,
   Platform,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -78,14 +81,18 @@ const Home = () => {
   const isLight = mode === 'light';
   const isFocused = useIsFocused();
   const queryClient = useQueryClient();
+  const [isSearchVisible, setIsSearchVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchAnim = React.useRef(new Animated.Value(0)).current;
   const { data: t } = useTranslateTexts({
-    texts: ["What's on your mind?", 'No posts found'],
+    texts: ["What's on your mind?", 'No posts found', 'Search posts...'],
     targetLang: language,
     enabled: !!language && language !== 'EN',
   });
   const tx = (i: number, fallback: string) =>
     t?.translations?.[i] || fallback;
   const createPlaceholder = tx(0, "What's on your mind?");
+  const searchPlaceholder = tx(2, 'Search posts...');
 
   const posts = useMemo(() => {
     const pages = Array.isArray((data as any)?.pages)
@@ -103,6 +110,41 @@ const Home = () => {
       return true;
     });
   }, [data]);
+
+  const filteredPosts = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return posts;
+
+    return posts.filter((item: any) => {
+      const description = String(item?.description || '').toLowerCase();
+      const authorName = String(item?.author?.name || '').toLowerCase();
+      const displayName = String(item?.profile?.displayName || '').toLowerCase();
+      const username = String(item?.profile?.username || '').toLowerCase();
+      return (
+        description.includes(query) ||
+        authorName.includes(query) ||
+        displayName.includes(query) ||
+        username.includes(query)
+      );
+    });
+  }, [posts, searchQuery]);
+
+  const toggleSearch = useCallback(() => {
+    setIsSearchVisible(prev => {
+      const nextVisible = !prev;
+      if (!nextVisible) setSearchQuery('');
+      return nextVisible;
+    });
+  }, []);
+
+  React.useEffect(() => {
+    Animated.timing(searchAnim, {
+      toValue: isSearchVisible ? 1 : 0,
+      duration: isSearchVisible ? 220 : 180,
+      easing: isSearchVisible ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [isSearchVisible, searchAnim]);
 
   const header = useMemo(
     () => (
@@ -123,6 +165,13 @@ const Home = () => {
             </View>
           </TouchableOpacity>
           <View className='flex-row gap-3 items-center'>
+            <TouchableOpacity onPress={toggleSearch}>
+              <Ionicons
+                name='search-outline'
+                size={23}
+                color={isLight ? 'black' : 'white'}
+              />
+            </TouchableOpacity>
             <TouchableOpacity
               onPress={() => router.push('/screens/home/notification')}
               className='relative'
@@ -150,6 +199,56 @@ const Home = () => {
           </View>
         </View>
 
+        <Animated.View
+          style={{
+            marginHorizontal: 16,
+            marginTop: searchAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 12],
+            }),
+            height: searchAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 44],
+            }),
+            opacity: searchAnim,
+            transform: [
+              {
+                translateY: searchAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [-14, 0],
+                }),
+              },
+            ],
+            overflow: 'hidden',
+          }}
+          pointerEvents={isSearchVisible ? 'auto' : 'none'}
+        >
+          <View className='flex-1 flex-row items-center gap-2 bg-[#F0F2F5] dark:bg-[#FFFFFF14] rounded-xl px-3 h-11'>
+            <Ionicons
+              name='search-outline'
+              size={18}
+              color={isLight ? '#6B7280' : '#D1D5DB'}
+            />
+            <TextInput
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder={searchPlaceholder}
+              placeholderTextColor={isLight ? '#9CA3AF' : '#9CA3AF'}
+              className='flex-1 text-black dark:text-white font-roboto-regular'
+              returnKeyType='search'
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Ionicons
+                  name='close-circle'
+                  size={18}
+                  color={isLight ? '#6B7280' : '#D1D5DB'}
+                />
+              </TouchableOpacity>
+            )}
+          </View>
+        </Animated.View>
+
         <StorySection />
 
         <TouchableOpacity
@@ -162,7 +261,18 @@ const Home = () => {
         </TouchableOpacity>
       </View>
     ),
-    [isLight, unreadCount, profileImageUrl, isProfileLoading, createPlaceholder]
+    [
+      isLight,
+      unreadCount,
+      profileImageUrl,
+      isProfileLoading,
+      createPlaceholder,
+      isSearchVisible,
+      searchQuery,
+      searchPlaceholder,
+      searchAnim,
+      toggleSearch,
+    ]
   );
 
   const renderPost = useCallback(
@@ -245,7 +355,7 @@ const Home = () => {
           style={{ flex: 1 }}
         >
           <FlatList
-            data={posts}
+            data={filteredPosts}
             renderItem={renderPost}
             keyExtractor={keyExtractor}
             ListHeaderComponent={header}

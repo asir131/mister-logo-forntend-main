@@ -821,21 +821,15 @@ const PostCard = ({
     }
   };
 
-  // Use post data if provided, otherwise use defaults
   const authorName =
-    post?.profile?.displayName || post?.author?.name || 'Maya Lin';
-  const authorProfession = post?.profile?.role || 'Painter';
-  const authorAvatar =
-    post?.profile?.profileImageUrl ||
-    'https://thelightcommittee.com/wp-content/uploads/elementor/thumbs/studio-business-headshot-of-a-black-man-in-Los-Angeles-r42uipeyz48g590yz1bhrtos4flfu3q2tuzohhy7f4.jpg';
-  const postText =
-    post?.description ||
-    'New abstract series exploring the \n intersection of light and shadow. What do you see? #AbstractArt #Minimalism #BlackAndWhite';
+    post?.profile?.displayName || post?.author?.name || post?.profile?.username || '';
+  const authorProfession = post?.profile?.role || '';
+  const authorAvatar = String(post?.profile?.profileImageUrl || '').trim();
+  const postText = String(post?.description || '').trim();
   const postImage = post?.mediaUrl || img;
-  // Format timestamp if needed, or just use raw string for now
   const timestamp = post?.createdAt
     ? new Date(post.createdAt).toLocaleDateString()
-    : '2h ago';
+    : '';
 
   const scheduledTime = post?.scheduledFor
     ? new Date(post.scheduledFor).toLocaleString([], {
@@ -860,7 +854,7 @@ const PostCard = ({
   const { data: translatedDesc } = useTranslateTexts({
     texts: [postText],
     targetLang: preferredLanguage,
-    enabled: autoTranslateEnabled && isCardActive,
+    enabled: autoTranslateEnabled && isCardActive && postText.length > 0,
   });
 
   const { data: translatedComments } = useTranslateTexts({
@@ -1073,11 +1067,21 @@ const PostCard = ({
           }}
           className='flex-row gap-3'
         >
-          <Image
-            source={authorAvatar}
-            style={{ width: 40, height: 40, borderRadius: 100 }}
-            contentFit='cover'
-          />
+          {authorAvatar ? (
+            <Image
+              source={{ uri: authorAvatar }}
+              style={{ width: 40, height: 40, borderRadius: 100 }}
+              contentFit='cover'
+            />
+          ) : (
+            <View className='w-10 h-10 rounded-full bg-black/10 dark:bg-white/10 items-center justify-center'>
+              <Ionicons
+                name='person-outline'
+                size={20}
+                color={iconColor}
+              />
+            </View>
+          )}
           <View>
             {officeVariant ? (
               <>
@@ -1097,18 +1101,20 @@ const PostCard = ({
               </>
             ) : (
               <>
-                <Text className='font-roboto-semibold text-sm text-primary dark:text-white'>
-                  {authorName}
-                </Text>
+                {!!authorName && (
+                  <Text className='font-roboto-semibold text-sm text-primary dark:text-white'>
+                    {authorName}
+                  </Text>
+                )}
                 {isScheduled ? (
                   <Text className='font-roboto-medium text-xs text-blue-400'>
                     {uiTexts(22, 'Scheduled:')} {scheduledTime}
                   </Text>
-                ) : (
+                ) : !!authorProfession ? (
                   <Text className='font-roboto-regular text-sm text-secondary dark:text-white/80'>
                     {authorProfession}
                   </Text>
-                )}
+                ) : null}
               </>
             )}
           </View>
@@ -1371,12 +1377,16 @@ const PostCard = ({
 
       {/* post description */}
       <View className='px-3 pb-3'>
-        <Text className='font-roboto-regular text-primary dark:text-white'>
-          {translatedDesc?.translations?.[0] || postText}
-        </Text>
-        <Text className='font-roboto-semibold text-sm text-secondary dark:text-white/80 mt-2.5'>
-          {timestamp}
-        </Text>
+        {postText.length > 0 && (
+          <Text className='font-roboto-regular text-primary dark:text-white'>
+            {translatedDesc?.translations?.[0] || postText}
+          </Text>
+        )}
+        {!!timestamp && (
+          <Text className='font-roboto-semibold text-sm text-secondary dark:text-white/80 mt-2.5'>
+            {timestamp}
+          </Text>
+        )}
       </View>
 
       {/* expandable comment section */}

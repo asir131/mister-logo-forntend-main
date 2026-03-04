@@ -1066,30 +1066,3 @@ const TrendingScreen = () => {
 };
 
 export default TrendingScreen;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
