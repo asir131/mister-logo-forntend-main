@@ -25,6 +25,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Image,
   View,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
@@ -36,6 +37,17 @@ if (MAPBOX_TOKEN) {
 }
 
 const DEFAULT_COORDINATE: [number, number] = [90.4125, 23.8103];
+
+const FALLBACK_CITY_COORDINATES: [number, number][] = [
+  [90.4125, 23.8103], // Dhaka
+  [77.209, 28.6139], // Delhi
+  [74.3587, 31.5204], // Lahore
+  [88.3639, 22.5726], // Kolkata
+  [78.4867, 17.385], // Hyderabad
+  [80.2707, 13.0827], // Chennai
+  [85.324, 27.7172], // Kathmandu
+  [106.6297, 10.8231], // Ho Chi Minh City
+];
 
 const formatMessageTime = (createdAt: string) => {
   const messageDate = new Date(createdAt);
@@ -56,6 +68,16 @@ const formatMessageTime = (createdAt: string) => {
     minute: '2-digit',
     hour12: true,
   });
+};
+
+const isRenderableCoordinate = (lat: number, lng: number) => {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+  if (lat < -85 || lat > 85 || lng < -180 || lng > 180) return false;
+
+  // Avoid null-island style bad payloads that put map in ocean.
+  if (Math.abs(lat) < 0.001 && Math.abs(lng) < 0.001) return false;
+
+  return true;
 };
 
 const pickMapCenter = (
@@ -139,25 +161,44 @@ const ChatsList = () => {
   const validSharedLocations = useMemo(
     () =>
       sharedLocations
-        .filter(
-          (item: any) =>
-            Number.isFinite(Number(item?.latitude)) && Number.isFinite(Number(item?.longitude)),
+        .filter((item: any) =>
+          isRenderableCoordinate(Number(item?.latitude), Number(item?.longitude))
         )
         .map((item: any) => ({
           userId: String(item?.userId || ''),
           name: String(item?.name || 'User'),
+          profileImageUrl: item?.profileImageUrl || null,
           latitude: Number(item.latitude),
           longitude: Number(item.longitude),
         })),
     [sharedLocations],
   );
 
+  const randomCityCenter = useMemo<[number, number]>(() => {
+    const index = Math.floor(Math.random() * FALLBACK_CITY_COORDINATES.length);
+    return FALLBACK_CITY_COORDINATES[index] || DEFAULT_COORDINATE;
+  }, []);
+
   const mapCenter = useMemo(
-    () => pickMapCenter(validSharedLocations),
-    [validSharedLocations],
+    () =>
+      validSharedLocations.length > 0
+        ? pickMapCenter(validSharedLocations)
+        : randomCityCenter,
+    [validSharedLocations, randomCityCenter],
   );
 
-  const mapZoom = validSharedLocations.length > 0 ? 11 : 2;
+  const mapZoom = validSharedLocations.length > 0 ? 11 : 10;
+  const mySharedCoordinate = useMemo<[number, number] | null>(() => {
+    const lat = Number((mySharedLocation as any)?.latitude);
+    const lng = Number((mySharedLocation as any)?.longitude);
+    if (!isRenderableCoordinate(lat, lng)) return null;
+    return [lng, lat];
+  }, [mySharedLocation]);
+
+  const previewMapCenter = mySharedCoordinate || randomCityCenter;
+  const previewMapZoom = mySharedCoordinate ? 13 : 12;
+  const fullMapCenter = mySharedCoordinate || mapCenter;
+  const fullMapZoom = mySharedCoordinate ? 13 : mapZoom;
   const hasMapboxToken = MAPBOX_TOKEN.length > 0;
 
   const lastMessageTexts = useMemo(
@@ -175,6 +216,20 @@ const ChatsList = () => {
     translatedMessages?.translations?.[index] || fallback;
   const isChatOnline = (chat: any) =>
     isConnected ? isUserOnline(chat?.userId) : Boolean(chat?.isOnline);
+
+  const handleOpenLocationProfile = (targetUserId: string) => {
+    if (!targetUserId) return;
+
+    if (String(targetUserId) === String(user?.id || '')) {
+      router.push('/(tabs)/profile');
+      return;
+    }
+
+    router.push({
+      pathname: '/screens/profile/other-profile',
+      params: { id: String(targetUserId) },
+    });
+  };
 
   const handleToggleLocationShare = async () => {
     try {
@@ -292,11 +347,7 @@ const ChatsList = () => {
           </View>
 
           <View className='mx-6 mt-4'>
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={() => setFullMapVisible(true)}
-              className='w-full h-[120px] rounded-2xl overflow-hidden border border-black/20 dark:border-[#FFFFFF1A] bg-[#E6EEF8] dark:bg-[#1A2433]'
-            >
+            <View className='w-full h-[140px] rounded-2xl overflow-hidden border border-black/20 dark:border-[#FFFFFF1A] bg-[#E6EEF8] dark:bg-[#1A2433]'>
               {hasMapboxToken ? (
                 <Mapbox.MapView
                   style={{ flex: 1 }}
@@ -310,18 +361,41 @@ const ChatsList = () => {
                   scrollEnabled={false}
                 >
                   <Mapbox.Camera
-                    centerCoordinate={mapCenter}
-                    zoomLevel={mapZoom}
+                    centerCoordinate={previewMapCenter}
+                    zoomLevel={previewMapZoom}
                     animationMode='none'
                   />
                   {validSharedLocations.map(location => (
-                    <Mapbox.PointAnnotation
+                    <Mapbox.MarkerView
                       key={`preview-${location.userId}`}
                       id={`preview-${location.userId}`}
                       coordinate={[location.longitude, location.latitude]}
+                      anchor={{ x: 0.5, y: 1 }}
                     >
-                      <View className='w-3 h-3 rounded-full bg-[#007AFF] border border-white' />
-                    </Mapbox.PointAnnotation>
+                      <TouchableOpacity
+                        activeOpacity={0.9}
+                        onPress={() => handleOpenLocationProfile(location.userId)}
+                        className='items-center'
+                      >
+                        <View className='h-7 w-7 rounded-full overflow-hidden border border-white bg-[#111827]'>
+                          {location.profileImageUrl ? (
+                            <Image
+                              source={{ uri: String(location.profileImageUrl) }}
+                              style={{ width: '100%', height: '100%' }}
+                            />
+                          ) : (
+                            <View className='flex-1 items-center justify-center'>
+                              <Ionicons name='person' size={13} color='#D1D5DB' />
+                            </View>
+                          )}
+                        </View>
+                        <View className='mt-1 rounded-md px-1.5 py-0.5 bg-black/55'>
+                          <Text className='text-white text-[10px]' numberOfLines={1}>
+                            {location.name}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    </Mapbox.MarkerView>
                   ))}
                 </Mapbox.MapView>
               ) : (
@@ -341,13 +415,17 @@ const ChatsList = () => {
               )}
 
               {hasMapboxToken && (
-                <View className='absolute left-0 right-0 bottom-0 bg-black/40 px-3 py-2'>
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={() => setFullMapVisible(true)}
+                  className='absolute left-0 right-0 bottom-0 bg-black/40 px-3 py-2'
+                >
                   <Text className='text-white text-xs'>
                     {tx(9, 'Tap to open full map')}
                   </Text>
-                </View>
+                </TouchableOpacity>
               )}
-            </TouchableOpacity>
+            </View>
 
             <TouchableOpacity
               className='mt-3 self-start px-4 py-2 rounded-full bg-black dark:bg-white'
@@ -460,18 +538,41 @@ const ChatsList = () => {
                       scaleBarEnabled={false}
                     >
                       <Mapbox.Camera
-                        centerCoordinate={mapCenter}
-                        zoomLevel={mapZoom}
+                        centerCoordinate={fullMapCenter}
+                        zoomLevel={fullMapZoom}
                         animationMode='none'
                       />
                       {validSharedLocations.map(location => (
-                        <Mapbox.PointAnnotation
+                        <Mapbox.MarkerView
                           key={`full-${location.userId}`}
                           id={`full-${location.userId}`}
                           coordinate={[location.longitude, location.latitude]}
+                      anchor={{ x: 0.5, y: 1 }}
                         >
-                          <View className='w-3.5 h-3.5 rounded-full bg-[#007AFF] border border-white' />
-                        </Mapbox.PointAnnotation>
+                          <TouchableOpacity
+                            activeOpacity={0.9}
+                            onPress={() => handleOpenLocationProfile(location.userId)}
+                            className='items-center'
+                          >
+                            <View className='h-9 w-9 rounded-full overflow-hidden border border-white bg-[#111827]'>
+                              {location.profileImageUrl ? (
+                                <Image
+                                  source={{ uri: String(location.profileImageUrl) }}
+                                  style={{ width: '100%', height: '100%' }}
+                                />
+                              ) : (
+                                <View className='flex-1 items-center justify-center'>
+                                  <Ionicons name='person' size={15} color='#D1D5DB' />
+                                </View>
+                              )}
+                            </View>
+                            <View className='mt-1 rounded-md px-2 py-0.5 bg-black/55 max-w-[120px]'>
+                              <Text className='text-white text-[11px]' numberOfLines={1}>
+                                {location.name}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        </Mapbox.MarkerView>
                       ))}
                     </Mapbox.MapView>
                   </View>
@@ -509,6 +610,15 @@ const ChatsList = () => {
 };
 
 export default ChatsList;
+
+
+
+
+
+
+
+
+
 
 
 

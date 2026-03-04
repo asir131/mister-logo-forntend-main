@@ -60,6 +60,8 @@ export const useGetTrendingPost = (
     enabled: options?.enabled,
     placeholderData: previousData => previousData,
     staleTime: 10000,
+    gcTime: 60 * 1000,
+    maxPages: 3,
     initialPageParam: 1,
   });
 };

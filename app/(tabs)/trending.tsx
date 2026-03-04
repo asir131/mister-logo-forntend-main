@@ -33,6 +33,7 @@ import {
   TouchableWithoutFeedback,
   View,
   Modal,
+  ViewToken,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
@@ -68,6 +69,7 @@ const TrendingScreen = () => {
   const [selectedTab, setSelectedTab] = useState<TabType>('active');
   const [usernameSearch, setUsernameSearch] = useState('');
   const [querySearch, setQuerySearch] = useState('');
+  const [visibleItemIds, setVisibleItemIds] = useState<Set<string>>(new Set());
   useEffect(() => {
     const timer = setTimeout(() => {
       setQuerySearch(usernameSearch.trim());
@@ -318,6 +320,37 @@ const TrendingScreen = () => {
   }, [activeUblasts, sharedByUblastId, normalizedSearch, isSearchMatch]);
 
   const endReachedLockedRef = useRef(false);
+
+  const viewabilityConfigRef = useRef({
+    itemVisiblePercentThreshold: 55,
+    minimumViewTime: 120,
+  });
+
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      const nextIds = new Set<string>();
+
+      viewableItems.forEach(viewable => {
+        const id = String((viewable?.item as any)?._id || '');
+        if (id) nextIds.add(id);
+      });
+
+      setVisibleItemIds(prevIds => {
+        if (prevIds.size === nextIds.size) {
+          let unchanged = true;
+          for (const id of nextIds) {
+            if (!prevIds.has(id)) {
+              unchanged = false;
+              break;
+            }
+          }
+          if (unchanged) return prevIds;
+        }
+
+        return nextIds;
+      });
+    }
+  ).current;
 
   const renderHeader = () => (
     <View>
@@ -958,6 +991,7 @@ const TrendingScreen = () => {
           <FlatList
             data={selectedTab === 'active' ? searchedActiveUblasts : searchedFilteredPosts}
             renderItem={({ item }) => {
+              const visibleNow = isFocused && visibleItemIds.has(String(item?._id || ''));
               if (selectedTab === 'active') {
                 const sharedPost = sharedByUblastId.get(String(item?._id));
                 if (sharedPost) {
@@ -966,7 +1000,7 @@ const TrendingScreen = () => {
                       post={sharedPost}
                       currentUserId={user?.id}
                       className='mt-4 mx-5'
-                      isVisible={isFocused}
+                      isVisible={visibleNow}
                       disableShare={
                         !isEligible &&
                         (Boolean((sharedPost as any)?.ublastId) ||
@@ -979,7 +1013,7 @@ const TrendingScreen = () => {
                 return (
                   <UblastCard
                     item={item}
-                    isVisible={isFocused}
+                    isVisible={visibleNow}
                     isFocused={isFocused}
                   />
                 );
@@ -989,7 +1023,7 @@ const TrendingScreen = () => {
                   post={item}
                   currentUserId={user?.id}
                   className='mt-4 mx-5'
-                  isVisible={isFocused}
+                  isVisible={visibleNow}
                   disableShare={
                     !isEligible &&
                     (Boolean((item as any)?.ublastId) ||
@@ -1003,6 +1037,8 @@ const TrendingScreen = () => {
               item?._id ? String(item._id) : `trending-${index}`
             }
             contentContainerStyle={{ paddingBottom: 100 }}
+            onViewableItemsChanged={onViewableItemsChanged}
+            viewabilityConfig={viewabilityConfigRef.current}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps='always'
             keyboardDismissMode='none'

@@ -20,6 +20,8 @@ export const useSocketPresence = () => {
     if (!socket) return;
 
     socketRef.current = socket;
+    setIsConnected(Boolean(socket.connected));
+
     const auth = getAuth();
     const myId = auth.user?.id;
 
@@ -84,6 +86,10 @@ export const useSocketPresence = () => {
 
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
+
+    if (socket.connected && myId) {
+      socket.emit('presence:join', { userId: myId });
+    }
     socket.on('presence:list', onPresenceList);
     socket.on('presence:update', onPresenceUpdate);
     socket.on('user:online', onUserOnline);

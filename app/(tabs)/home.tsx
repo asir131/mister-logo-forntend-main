@@ -14,7 +14,7 @@ import useThemeStore from '@/store/theme.store';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -26,6 +26,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ViewToken,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
@@ -42,6 +43,13 @@ interface Profile {
   profileImageUrl: string;
   role: string;
   username: string;
+}
+
+interface SearchUser {
+  userId: string;
+  name: string;
+  username: string;
+  profileImageUrl: string;
 }
 
 export interface Post {
@@ -83,16 +91,18 @@ const Home = () => {
   const queryClient = useQueryClient();
   const [isSearchVisible, setIsSearchVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const [visiblePostIds, setVisiblePostIds] = useState<Set<string>>(new Set());
   const searchAnim = React.useRef(new Animated.Value(0)).current;
   const { data: t } = useTranslateTexts({
-    texts: ["What's on your mind?", 'No posts found', 'Search posts...'],
+    texts: ["What's on your mind?", 'No posts found', 'Search posts or users...'],
     targetLang: language,
     enabled: !!language && language !== 'EN',
   });
   const tx = (i: number, fallback: string) =>
     t?.translations?.[i] || fallback;
   const createPlaceholder = tx(0, "What's on your mind?");
-  const searchPlaceholder = tx(2, 'Search posts...');
+  const searchPlaceholder = tx(2, 'Search posts or users...');
 
   const posts = useMemo(() => {
     const pages = Array.isArray((data as any)?.pages)
@@ -111,8 +121,26 @@ const Home = () => {
     });
   }, [data]);
 
+  const searchableUsers = useMemo<SearchUser[]>(() => {
+    const unique = new Map<string, SearchUser>();
+
+    posts.forEach((item: any) => {
+      const userId = String(item?.author?.id || item?.author?._id || '');
+      if (!userId || unique.has(userId)) return;
+
+      unique.set(userId, {
+        userId,
+        name: String(item?.profile?.displayName || item?.author?.name || 'User'),
+        username: String(item?.profile?.username || ''),
+        profileImageUrl: String(item?.profile?.profileImageUrl || ''),
+      });
+    });
+
+    return Array.from(unique.values());
+  }, [posts]);
+
   const filteredPosts = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
+    const query = debouncedSearchQuery.trim().toLowerCase();
     if (!query) return posts;
 
     return posts.filter((item: any) => {
@@ -127,7 +155,48 @@ const Home = () => {
         username.includes(query)
       );
     });
-  }, [posts, searchQuery]);
+  }, [posts, debouncedSearchQuery]);
+
+  React.useEffect(() => {
+    const timeout = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 250);
+
+    return () => clearTimeout(timeout);
+  }, [searchQuery]);
+
+  const matchedUsers = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return [];
+
+    return searchableUsers
+      .filter(item => {
+        const name = String(item?.name || '').toLowerCase();
+        const username = String(item?.username || '').toLowerCase();
+        return name.includes(query) || username.includes(query);
+      })
+      .slice(0, 8);
+  }, [searchableUsers, searchQuery]);
+
+  const handleOpenSearchUser = useCallback(
+    (targetUserId: string) => {
+      if (!targetUserId) return;
+
+      setSearchQuery('');
+      setIsSearchVisible(false);
+
+      if (String(targetUserId) === String(user?.id || '')) {
+        router.push('/(tabs)/profile');
+        return;
+      }
+
+      router.push({
+        pathname: '/screens/profile/other-profile',
+        params: { id: String(targetUserId) },
+      });
+    },
+    [user?.id]
+  );
 
   const toggleSearch = useCallback(() => {
     setIsSearchVisible(prev => {
@@ -201,7 +270,6 @@ const Home = () => {
 
         <Animated.View
           style={{
-            marginHorizontal: 16,
             marginTop: searchAnim.interpolate({
               inputRange: [0, 1],
               outputRange: [0, 12],
@@ -249,6 +317,29 @@ const Home = () => {
           </View>
         </Animated.View>
 
+        {isSearchVisible && searchQuery.trim().length > 0 && matchedUsers.length > 0 && (
+          <View className='mt-2 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-[#111827] overflow-hidden'>
+            {matchedUsers.map((item: SearchUser) => (
+              <TouchableOpacity
+                key={item.userId}
+                className='px-3 py-2.5 flex-row items-center gap-3 border-b border-black/5 dark:border-white/10'
+                onPress={() => handleOpenSearchUser(item.userId)}
+                activeOpacity={0.8}
+              >
+                <UserAvatar uri={item.profileImageUrl || null} size={34} />
+                <View className='flex-1'>
+                  <Text className='text-black dark:text-white font-roboto-medium text-sm' numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  <Text className='text-[#6B7280] dark:text-[#9CA3AF] text-xs' numberOfLines={1}>
+                    @{item.username || 'user'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
         <StorySection />
 
         <TouchableOpacity
@@ -272,12 +363,16 @@ const Home = () => {
       searchPlaceholder,
       searchAnim,
       toggleSearch,
+      matchedUsers,
+      handleOpenSearchUser,
     ]
   );
 
   const renderPost = useCallback(
     ({ item, index }: { item: Post; index: number }) => {
       if (!item?._id) return null;
+      const isItemVisible = visiblePostIds.has(String(item._id));
+
       return (
         <View>
           {item?.ublastId ? (
@@ -285,21 +380,21 @@ const Home = () => {
               post={item}
               className='mt-4'
               currentUserId={user?.id}
-              isVisible={isFocused}
+              isVisible={isFocused && isItemVisible}
             />
           ) : (
             <PostCard
               post={item}
               className='mt-4'
               currentUserId={user?.id}
-              isVisible={isFocused}
+              isVisible={isFocused && isItemVisible}
             />
           )}
           {index === 1 ? <SuggestedArtistsCard className='mt-4' /> : null}
         </View>
       );
     },
-    [user?.id, isFocused]
+    [user?.id, isFocused, visiblePostIds]
   );
 
   const listFooter = useMemo(() => {
@@ -327,6 +422,37 @@ const Home = () => {
       fetchNextPage();
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  const viewabilityConfigRef = useRef({
+    itemVisiblePercentThreshold: 55,
+    minimumViewTime: 120,
+  });
+
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      const nextIds = new Set<string>();
+
+      viewableItems.forEach(viewable => {
+        const id = String((viewable?.item as Post | undefined)?._id || '');
+        if (id) nextIds.add(id);
+      });
+
+      setVisiblePostIds(prevIds => {
+        if (prevIds.size === nextIds.size) {
+          let unchanged = true;
+          for (const id of nextIds) {
+            if (!prevIds.has(id)) {
+              unchanged = false;
+              break;
+            }
+          }
+          if (unchanged) return prevIds;
+        }
+
+        return nextIds;
+      });
+    }
+  ).current;
 
   if (isLoading && !isRefetching) {
     return (
@@ -362,6 +488,8 @@ const Home = () => {
             ListFooterComponent={listFooter}
             onEndReached={onEndReached}
             onEndReachedThreshold={0.5}
+            onViewableItemsChanged={onViewableItemsChanged}
+            viewabilityConfig={viewabilityConfigRef.current}
             showsVerticalScrollIndicator={false}
             refreshing={isRefetching}
             initialNumToRender={4}

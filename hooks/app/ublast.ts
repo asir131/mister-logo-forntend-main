@@ -168,6 +168,8 @@ export const useGetActiveUblasts = (options?: { enabled?: boolean; limit?: numbe
     enabled: options?.enabled,
     placeholderData: previousData => previousData,
     staleTime: 10000,
+    gcTime: 60 * 1000,
+    maxPages: 3,
   });
 };
 

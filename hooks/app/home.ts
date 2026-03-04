@@ -20,6 +20,9 @@ export const useGetAllPost = () => {
       return allPages.length + 1;
     },
     initialPageParam: 1,
+    maxPages: 3,
+    staleTime: 10 * 1000,
+    gcTime: 60 * 1000,
   });
 };
 
