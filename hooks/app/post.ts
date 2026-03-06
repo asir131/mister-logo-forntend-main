@@ -6,12 +6,30 @@ import Toast from 'react-native-toast-message';
 export const useCreatePost = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (formData: FormData) => {
-      console.log(JSON.stringify(formData, null, 2));
+    mutationFn: async (
+      payload:
+        | FormData
+        | {
+            formData: FormData;
+            onUploadProgress?: (percent: number) => void;
+          }
+    ) => {
+      const formData = payload instanceof FormData ? payload : payload.formData;
+      const onUploadProgress = payload instanceof FormData ? undefined : payload.onUploadProgress;
 
       const res = await api.post('/api/posts', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
+        },
+        onUploadProgress: event => {
+          if (!onUploadProgress) return;
+          const total = Number(event?.total || 0);
+          if (!total) {
+            onUploadProgress(0);
+            return;
+          }
+          const percent = Math.max(0, Math.min(100, Math.round((event.loaded * 100) / total)));
+          onUploadProgress(percent);
         },
       });
       return res;

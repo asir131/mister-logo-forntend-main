@@ -91,18 +91,17 @@ const Home = () => {
   const queryClient = useQueryClient();
   const [isSearchVisible, setIsSearchVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [visiblePostIds, setVisiblePostIds] = useState<Set<string>>(new Set());
   const searchAnim = React.useRef(new Animated.Value(0)).current;
   const { data: t } = useTranslateTexts({
-    texts: ["What's on your mind?", 'No posts found', 'Search posts or users...'],
+    texts: ["What's on your mind?", 'No posts found', 'Search users...'],
     targetLang: language,
     enabled: !!language && language !== 'EN',
   });
   const tx = (i: number, fallback: string) =>
     t?.translations?.[i] || fallback;
   const createPlaceholder = tx(0, "What's on your mind?");
-  const searchPlaceholder = tx(2, 'Search posts or users...');
+  const searchPlaceholder = tx(2, 'Search users...');
 
   const posts = useMemo(() => {
     const pages = Array.isArray((data as any)?.pages)
@@ -139,31 +138,7 @@ const Home = () => {
     return Array.from(unique.values());
   }, [posts]);
 
-  const filteredPosts = useMemo(() => {
-    const query = debouncedSearchQuery.trim().toLowerCase();
-    if (!query) return posts;
-
-    return posts.filter((item: any) => {
-      const description = String(item?.description || '').toLowerCase();
-      const authorName = String(item?.author?.name || '').toLowerCase();
-      const displayName = String(item?.profile?.displayName || '').toLowerCase();
-      const username = String(item?.profile?.username || '').toLowerCase();
-      return (
-        description.includes(query) ||
-        authorName.includes(query) ||
-        displayName.includes(query) ||
-        username.includes(query)
-      );
-    });
-  }, [posts, debouncedSearchQuery]);
-
-  React.useEffect(() => {
-    const timeout = setTimeout(() => {
-      setDebouncedSearchQuery(searchQuery);
-    }, 250);
-
-    return () => clearTimeout(timeout);
-  }, [searchQuery]);
+  const filteredPosts = posts;
 
   const matchedUsers = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -268,77 +243,79 @@ const Home = () => {
           </View>
         </View>
 
-        <Animated.View
-          style={{
-            marginTop: searchAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, 12],
-            }),
-            height: searchAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, 44],
-            }),
-            opacity: searchAnim,
-            transform: [
-              {
-                translateY: searchAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-14, 0],
-                }),
-              },
-            ],
-            overflow: 'hidden',
-          }}
-          pointerEvents={isSearchVisible ? 'auto' : 'none'}
-        >
-          <View className='flex-1 flex-row items-center gap-2 bg-[#F0F2F5] dark:bg-[#FFFFFF14] rounded-xl px-3 h-11'>
-            <Ionicons
-              name='search-outline'
-              size={18}
-              color={isLight ? '#6B7280' : '#D1D5DB'}
-            />
-            <TextInput
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder={searchPlaceholder}
-              placeholderTextColor={isLight ? '#9CA3AF' : '#9CA3AF'}
-              className='flex-1 text-black dark:text-white font-roboto-regular'
-              returnKeyType='search'
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <Ionicons
-                  name='close-circle'
-                  size={18}
-                  color={isLight ? '#6B7280' : '#D1D5DB'}
-                />
-              </TouchableOpacity>
-            )}
-          </View>
-        </Animated.View>
+        <View style={{ position: 'relative', zIndex: 50, elevation: 50 }}>
+          <Animated.View
+            style={{
+              marginTop: searchAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, 12],
+              }),
+              height: searchAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, 44],
+              }),
+              opacity: searchAnim,
+              transform: [
+                {
+                  translateY: searchAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-14, 0],
+                  }),
+                },
+              ],
+              overflow: 'hidden',
+            }}
+            pointerEvents={isSearchVisible ? 'auto' : 'none'}
+          >
+            <View className='flex-1 flex-row items-center gap-2 bg-[#F0F2F5] dark:bg-[#FFFFFF14] rounded-xl px-3 h-11'>
+              <Ionicons
+                name='search-outline'
+                size={18}
+                color={isLight ? '#6B7280' : '#D1D5DB'}
+              />
+              <TextInput
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder={searchPlaceholder}
+                placeholderTextColor={isLight ? '#9CA3AF' : '#9CA3AF'}
+                className='flex-1 text-black dark:text-white font-roboto-regular'
+                returnKeyType='search'
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <Ionicons
+                    name='close-circle'
+                    size={18}
+                    color={isLight ? '#6B7280' : '#D1D5DB'}
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
+          </Animated.View>
 
-        {isSearchVisible && searchQuery.trim().length > 0 && matchedUsers.length > 0 && (
-          <View className='mt-2 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-[#111827] overflow-hidden'>
-            {matchedUsers.map((item: SearchUser) => (
-              <TouchableOpacity
-                key={item.userId}
-                className='px-3 py-2.5 flex-row items-center gap-3 border-b border-black/5 dark:border-white/10'
-                onPress={() => handleOpenSearchUser(item.userId)}
-                activeOpacity={0.8}
-              >
-                <UserAvatar uri={item.profileImageUrl || null} size={34} />
-                <View className='flex-1'>
-                  <Text className='text-black dark:text-white font-roboto-medium text-sm' numberOfLines={1}>
-                    {item.name}
-                  </Text>
-                  <Text className='text-[#6B7280] dark:text-[#9CA3AF] text-xs' numberOfLines={1}>
-                    @{item.username || 'user'}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
+          {isSearchVisible && searchQuery.trim().length > 0 && matchedUsers.length > 0 && (
+            <View className='absolute left-0 right-0 top-14 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-[#111827] overflow-hidden'>
+              {matchedUsers.map((item: SearchUser) => (
+                <TouchableOpacity
+                  key={item.userId}
+                  className='px-3 py-2.5 flex-row items-center gap-3 border-b border-black/5 dark:border-white/10'
+                  onPress={() => handleOpenSearchUser(item.userId)}
+                  activeOpacity={0.8}
+                >
+                  <UserAvatar uri={item.profileImageUrl || null} size={34} />
+                  <View className='flex-1'>
+                    <Text className='text-black dark:text-white font-roboto-medium text-sm' numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    <Text className='text-[#6B7280] dark:text-[#9CA3AF] text-xs' numberOfLines={1}>
+                      @{item.username || 'user'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
 
         <StorySection />
 

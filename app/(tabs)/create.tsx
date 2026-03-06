@@ -619,7 +619,13 @@ const CreatePost = () => {
         );
       }
     } else {
-      createPost(formData, {
+      setUploadProgress(0);
+      createPost(
+        {
+          formData,
+          onUploadProgress: percent => setUploadProgress(percent),
+        },
+        {
         onSuccess: () => {
           if (shouldShareToInstagramApp && instagramMediaUri) {
             shareToInstagramPersonal(instagramMediaUri);
@@ -650,7 +656,8 @@ const CreatePost = () => {
           });
           setUploadProgress(null);
         },
-      });
+      }
+      );
     }
   };
 
@@ -923,11 +930,13 @@ const pickAudio = async () => {
           {/* border */}
           <View className='border-b border-black/20 dark:border-[#FFFFFF0D] w-full mt-2'></View>
 
-          {isUploadingVideo && uploadProgress !== null && (
+          {(isUploadingVideo || isCreating) && uploadProgress !== null && (
             <View className='px-6 mt-3'>
               <View className='bg-[#F0F2F5] dark:bg-[#FFFFFF0D] rounded-lg p-3'>
                 <Text className='text-black dark:text-white text-sm'>
-                  {tx(45, 'Uploading video')}: {uploadProgress}%
+                  {isUploadingVideo || video
+                    ? tx(45, 'Uploading video')
+                    : 'Uploading media'}: {uploadProgress}%
                 </Text>
               </View>
             </View>
