@@ -40,7 +40,8 @@ const Login = () => {
   const { setUser, setRememberPreference, user } = useAuthStore();
 
   const { mode } = useThemeStore();
-  const isLight = mode === 'light';  const { language } = useLanguageStore();
+  const isLight = mode === 'light';
+  const { language } = useLanguageStore();
   const { data: t } = useTranslateTexts({
     texts: [
       'Welcome Back!',
@@ -52,7 +53,7 @@ const Login = () => {
       'Forgot Password?',
       'Login',
       "Don't have an account?",
-      'Register',
+      'Registration',
       'Or continue with',
     ],
     targetLang: language,
@@ -420,7 +421,7 @@ const Login = () => {
                 <TouchableOpacity onPress={() => router.push('/(auth)/signup')}>
                   <Text className='font-roboto-bold text-secondary dark:text-white/80 text-sm'>
                     {' '}
-                    {tx(9, 'Register')}
+                    {tx(9, 'Registration')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -475,6 +476,7 @@ const Login = () => {
 };
 
 export default Login;
+
 
 
 

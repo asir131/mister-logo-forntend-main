@@ -28,7 +28,8 @@ export const useCreatePost = () => {
             onUploadProgress(0);
             return;
           }
-          const percent = Math.max(0, Math.min(100, Math.round((event.loaded * 100) / total)));
+          const rawPercent = Math.round((event.loaded * 100) / total);
+          const percent = Math.max(0, Math.min(100, rawPercent));
           onUploadProgress(percent);
         },
       });
@@ -467,4 +468,7 @@ export const useSharePost = () => {
     },
   });
 };
+
+
+
 

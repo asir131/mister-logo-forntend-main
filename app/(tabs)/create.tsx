@@ -164,6 +164,7 @@ const CreatePost = () => {
       'Post Update Failed',
       'Done',
       'Uploading video',
+      'Processing upload',
       'UCuts',
       'UCuts supports photo or video only.',
       'UCuts require photo or video.',
@@ -324,8 +325,9 @@ const CreatePost = () => {
     setVideoPlayerUri(null);
     setAudio(null);
     setDescription('');
-    setUploadProgress(null);
-    setIsFacebook(false);
+    setUploadProgress(100);
+                setTimeout(() => setUploadProgress(null), 250);
+                setIsFacebook(false);
     setIsInstagram(false);
     setIsTwitter(false);
     setIsYouTube(false);
@@ -356,14 +358,14 @@ const CreatePost = () => {
 
     if (isUcut) {
       if (!photo && !video) {
-        alert(tx(48, 'UCuts require photo or video.'));
+        alert(tx(49, 'UCuts require photo or video.'));
         return;
       }
 
       if (isEditMode) {
         Toast.show({
           type: 'info',
-          text1: tx(46, 'UCuts'),
+          text1: tx(47, 'UCuts'),
           text2: 'Edit is not supported for UCuts from this screen.',
         });
         return;
@@ -391,7 +393,7 @@ const CreatePost = () => {
         });
 
         resetCreateForm();
-        alert(tx(46, 'UCuts') + ' created successfully!');
+        alert(tx(47, 'UCuts') + ' created successfully!');
         setMode('selection');
       } catch {
         // Toast is handled inside useCreateUCuts
@@ -459,6 +461,7 @@ const CreatePost = () => {
           if (!mediaUrl) {
             throw new Error('Missing media URL from upload response');
           }
+          setUploadProgress(96);
           createPostByUrl(
             {
               description,
@@ -481,7 +484,8 @@ const CreatePost = () => {
                 setVideoPlayerUri(null);
                 setAudio(null);
                 setDescription('');
-                setUploadProgress(null);
+                setUploadProgress(100);
+                setTimeout(() => setUploadProgress(null), 250);
                 setIsFacebook(false);
                 setIsInstagram(false);
                 setIsTwitter(false);
@@ -574,8 +578,9 @@ const CreatePost = () => {
               setVideoPlayerUri(null);
               setAudio(null);
               setDescription('');
-              setUploadProgress(null);
-              setIsFacebook(false);
+              setUploadProgress(100);
+                setTimeout(() => setUploadProgress(null), 250);
+                setIsFacebook(false);
               setIsInstagram(false);
               setIsScheduleMode(false);
               router.back();
@@ -600,8 +605,9 @@ const CreatePost = () => {
               setVideoPlayerUri(null);
               setAudio(null);
               setDescription('');
-              setUploadProgress(null);
-              setIsFacebook(false);
+              setUploadProgress(100);
+                setTimeout(() => setUploadProgress(null), 250);
+                setIsFacebook(false);
               setIsInstagram(false);
               setIsScheduleMode(false);
 
@@ -636,8 +642,9 @@ const CreatePost = () => {
           setVideoPlayerUri(null);
           setAudio(null);
           setDescription('');
-          setUploadProgress(null);
-          setIsFacebook(false);
+          setUploadProgress(100);
+                setTimeout(() => setUploadProgress(null), 250);
+                setIsFacebook(false);
           setIsInstagram(false);
           setIsScheduleMode(false);
 
@@ -803,8 +810,8 @@ const pickAudio = async () => {
   if (isUcut) {
     Toast.show({
       type: 'info',
-      text1: tx(46, 'UCuts'),
-      text2: tx(49, 'UCuts do not support audio.'),
+      text1: tx(47, 'UCuts'),
+      text2: tx(50, 'UCuts do not support audio.'),
     });
     return;
   }
@@ -910,14 +917,14 @@ const pickAudio = async () => {
                   ? isEditMode
                     ? tx(37, 'Updating...')
                     : isUcut
-                      ? tx(51, 'Sharing UCuts...')
+                      ? tx(52, 'Sharing UCuts...')
                       : isScheduleMode
                         ? tx(38, 'UScheduling...')
                         : tx(39, 'UPosting...')
                   : isEditMode
                     ? tx(40, 'Update')
                     : isUcut
-                      ? tx(50, 'Share UCuts')
+                      ? tx(51, 'Share UCuts')
                       : isScheduleMode
                         ? tx(41, 'USchedule')
                         : isUclip
@@ -930,13 +937,15 @@ const pickAudio = async () => {
           {/* border */}
           <View className='border-b border-black/20 dark:border-[#FFFFFF0D] w-full mt-2'></View>
 
-          {(isUploadingVideo || isCreating) && uploadProgress !== null && (
+          {isLoading && uploadProgress !== null && (
             <View className='px-6 mt-3'>
               <View className='bg-[#F0F2F5] dark:bg-[#FFFFFF0D] rounded-lg p-3'>
                 <Text className='text-black dark:text-white text-sm'>
-                  {isUploadingVideo || video
-                    ? tx(45, 'Uploading video')
-                    : 'Uploading media'}: {uploadProgress}%
+                  {uploadProgress >= 95 && isLoading
+                    ? tx(46, 'Processing upload')
+                    : isUploadingVideo || video
+                      ? tx(45, 'Uploading video')
+                      : 'Uploading media'}: {uploadProgress}%
                 </Text>
               </View>
             </View>
@@ -1082,7 +1091,7 @@ const pickAudio = async () => {
                     className={`flex-1 py-2 rounded-full items-center justify-center ${postType === 'ucut' ? 'bg-[#F0F2F5] dark:bg-[#FFFFFF0D]' : 'bg-transparent'}`}
                   >
                     <Text className='text-black dark:text-white font-roboto-medium'>
-                      {tx(46, 'UCuts')}
+                      {tx(47, 'UCuts')}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -1093,7 +1102,7 @@ const pickAudio = async () => {
                 )}
                 {postType === 'ucut' && (
                   <Text className='text-secondary dark:text-white/80 text-xs mt-2'>
-                    {tx(47, 'UCuts supports photo or video only.')}
+                    {tx(48, 'UCuts supports photo or video only.')}
                   </Text>
                 )}
               </View>
@@ -1411,6 +1420,9 @@ const pickAudio = async () => {
 };
 
 export default CreatePost;
+
+
+
 
 
 

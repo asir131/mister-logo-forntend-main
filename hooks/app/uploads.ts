@@ -72,7 +72,7 @@ export const useUploadVideoToCloudinary = () => {
             try {
               const parsed = JSON.parse(xhr.responseText);
               resolve(parsed as CloudinaryUploadResponse);
-            } catch (err) {
+            } catch {
               reject(new Error('Cloud upload response parse failed'));
             }
             return;
@@ -83,7 +83,8 @@ export const useUploadVideoToCloudinary = () => {
         if (xhr.upload && onProgress) {
           xhr.upload.onprogress = (event) => {
             if (!event.lengthComputable) return;
-            const percent = Math.round((event.loaded / event.total) * 100);
+            const rawPercent = Math.round((event.loaded / event.total) * 100);
+            const percent = Math.max(0, Math.min(100, rawPercent));
             onProgress(percent);
           };
         }
@@ -92,3 +93,6 @@ export const useUploadVideoToCloudinary = () => {
     },
   });
 };
+
+
+
