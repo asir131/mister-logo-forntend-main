@@ -5,7 +5,7 @@ import UserAvatar from '@/components/ui/UserAvatar';
 import GradientBackground from '@/components/main/GradientBackground';
 import StorySection from '@/components/main/StorySection';
 import { useGetAllPost } from '@/hooks/app/home';
-import { useGetMyProfile } from '@/hooks/app/profile';
+import { useGetMyProfile, useGetSuggestedArtists } from '@/hooks/app/profile';
 import { useTranslateTexts } from '@/hooks/app/translate';
 import useAuthStore from '@/store/auth.store';
 import useLanguageStore from '@/store/language.store';
@@ -21,6 +21,7 @@ import {
   Easing,
   FlatList,
   KeyboardAvoidingView,
+  ScrollView,
   Platform,
   Text,
   TextInput,
@@ -79,6 +80,7 @@ const Home = () => {
   } = useGetAllPost();
   const { user } = useAuthStore();
   const { data: profileData, isLoading: isProfileLoading } = useGetMyProfile({ enabled: !!user?.token });
+  const { data: suggestedArtistsData } = useGetSuggestedArtists({ limit: 20, enabled: !!user?.token });
   const profileImageUrl =
     (profileData as any)?.profile?.profileImageUrl ||
     (profileData as any)?.profileImageUrl ||
@@ -124,19 +126,33 @@ const Home = () => {
     const unique = new Map<string, SearchUser>();
 
     posts.forEach((item: any) => {
-      const userId = String(item?.author?.id || item?.author?._id || '');
-      if (!userId || unique.has(userId)) return;
+      const userId = String(item?.author?.id || item?.author?._id || '').trim();
+      if (!userId) return;
 
+      const existing = unique.get(userId);
       unique.set(userId, {
         userId,
-        name: String(item?.profile?.displayName || item?.author?.name || 'User'),
-        username: String(item?.profile?.username || ''),
-        profileImageUrl: String(item?.profile?.profileImageUrl || ''),
+        name: String(item?.profile?.displayName || item?.author?.name || existing?.name || 'User').trim(),
+        username: String(item?.profile?.username || existing?.username || '').trim(),
+        profileImageUrl: String(item?.profile?.profileImageUrl || existing?.profileImageUrl || '').trim(),
+      });
+    });
+
+    (suggestedArtistsData?.artists || []).forEach((item: any) => {
+      const userId = String(item?.id || '').trim();
+      if (!userId) return;
+
+      const existing = unique.get(userId);
+      unique.set(userId, {
+        userId,
+        name: String(item?.name || existing?.name || 'User').trim(),
+        username: String(item?.username || existing?.username || '').trim(),
+        profileImageUrl: String(item?.profileImageUrl || existing?.profileImageUrl || '').trim(),
       });
     });
 
     return Array.from(unique.values());
-  }, [posts]);
+  }, [posts, suggestedArtistsData]);
 
   const filteredPosts = posts;
 
@@ -145,10 +161,33 @@ const Home = () => {
     if (!query) return [];
 
     return searchableUsers
-      .filter(item => {
-        const name = String(item?.name || '').toLowerCase();
-        const username = String(item?.username || '').toLowerCase();
-        return name.includes(query) || username.includes(query);
+      .map(item => {
+        const name = String(item?.name || '').toLowerCase().trim();
+        const username = String(item?.username || '').toLowerCase().trim();
+
+        let score = 99;
+        if (username === query) score = 0;
+        else if (name === query) score = 1;
+        else if (username.startsWith(query)) score = 2;
+        else if (name.startsWith(query)) score = 3;
+        else if (username.includes(query)) score = 4;
+        else if (name.includes(query)) score = 5;
+
+        return {
+          ...item,
+          score,
+          hasUsername: username.length > 0,
+          nameLength: name.length,
+          usernameLength: username.length,
+        };
+      })
+      .filter(item => item.score < 99)
+      .sort((a, b) => {
+        if (a.score !== b.score) return a.score - b.score;
+        if (a.hasUsername !== b.hasUsername) return a.hasUsername ? -1 : 1;
+        if (a.usernameLength !== b.usernameLength) return a.usernameLength - b.usernameLength;
+        if (a.nameLength !== b.nameLength) return a.nameLength - b.nameLength;
+        return a.name.localeCompare(b.name);
       })
       .slice(0, 8);
   }, [searchableUsers, searchQuery]);
@@ -294,25 +333,27 @@ const Home = () => {
           </Animated.View>
 
           {isSearchVisible && searchQuery.trim().length > 0 && matchedUsers.length > 0 && (
-            <View className='absolute left-0 right-0 top-14 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-[#111827] overflow-hidden'>
-              {matchedUsers.map((item: SearchUser) => (
-                <TouchableOpacity
-                  key={item.userId}
-                  className='px-3 py-2.5 flex-row items-center gap-3 border-b border-black/5 dark:border-white/10'
-                  onPress={() => handleOpenSearchUser(item.userId)}
-                  activeOpacity={0.8}
-                >
-                  <UserAvatar uri={item.profileImageUrl || null} size={34} />
-                  <View className='flex-1'>
-                    <Text className='text-black dark:text-white font-roboto-medium text-sm' numberOfLines={1}>
-                      {item.name}
-                    </Text>
-                    <Text className='text-[#6B7280] dark:text-[#9CA3AF] text-xs' numberOfLines={1}>
-                      @{item.username || 'user'}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
+            <View className='absolute left-0 right-0 top-14 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-[#111827] overflow-hidden max-h-[220px]'>
+              <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={matchedUsers.length > 3}>
+                {matchedUsers.map((item: SearchUser, index: number) => (
+                  <TouchableOpacity
+                    key={item.userId}
+                    className='px-3 py-2.5 flex-row items-center gap-3 border-b border-black/5 dark:border-white/10'
+                    onPress={() => handleOpenSearchUser(item.userId)}
+                    activeOpacity={0.8}
+                  >
+                    <UserAvatar uri={item.profileImageUrl || null} size={34} />
+                    <View className='flex-1'>
+                      <Text className='text-black dark:text-white font-roboto-medium text-sm' numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                      <Text className='text-[#6B7280] dark:text-[#9CA3AF] text-xs' numberOfLines={1}>
+                        @{item.username || 'user'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
           )}
         </View>
@@ -490,4 +531,12 @@ const Home = () => {
 };
 
 export default Home;
+
+
+
+
+
+
+
+
 

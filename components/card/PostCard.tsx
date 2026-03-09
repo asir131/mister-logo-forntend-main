@@ -217,10 +217,12 @@ const PostCard = ({
 
   useEffect(() => {
     if (!shouldUsePlayer) return;
-    if (isVisible === undefined) return;
+
+    // If visibility isn't controlled by parent, treat the card as visible.
+    const effectiveVisible = isVisible !== false;
 
     if (post?.mediaType === 'video') {
-      if (!isVisible) {
+      if (!effectiveVisible) {
         player.pause();
         return;
       }
@@ -232,7 +234,7 @@ const PostCard = ({
       return;
     }
 
-    if (post?.mediaType === 'audio' && !isVisible) {
+    if (post?.mediaType === 'audio' && !effectiveVisible) {
       player.pause();
     }
   }, [isVisible, post?.mediaType, player, shouldUsePlayer, isVideoPaused]);

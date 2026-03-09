@@ -15,7 +15,7 @@ import useAuthStore from '@/store/auth.store';
 import Entypo from '@expo/vector-icons/Entypo';
 import Feather from '@expo/vector-icons/Feather';
 import UserAvatar from '@/components/ui/UserAvatar';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   FlatList,
@@ -103,6 +103,21 @@ const ChatScreen = () => {
   });
   const msgText = (index: number, fallback: string) =>
     translatedMessages?.translations?.[index] || fallback;
+
+  const handleOpenPeerProfile = () => {
+    const targetUserId = String(peerUserId || userId || '').trim();
+    if (!targetUserId) return;
+
+    if (String(targetUserId) === String(authUserId || '')) {
+      router.push('/(tabs)/profile');
+      return;
+    }
+
+    router.push({
+      pathname: '/screens/profile/other-profile',
+      params: { id: targetUserId },
+    });
+  };
 
   const handleSendMessage = async () => {
     if (!message.trim()) return;
@@ -206,7 +221,7 @@ const ChatScreen = () => {
     /** ================= LEFT SIDE (OTHER USER) ================= */
     return (
       <View className='flex-row gap-3 items-end mt-7 px-4'>
-        <TouchableOpacity className='mt-2 relative'>
+        <TouchableOpacity className='mt-2 relative' onPress={handleOpenPeerProfile} activeOpacity={0.7}>
           <UserAvatar
             uri={userImage || null}
             size={40}
@@ -268,7 +283,7 @@ const ChatScreen = () => {
           <View className='flex-row justify-between items-center mx-6 mt-5 mb-2'>
             <View className='flex-row items-center gap-5'>
               <BackButton />
-              <TouchableOpacity className='mt-2 relative'>
+              <TouchableOpacity className='mt-2 relative' onPress={handleOpenPeerProfile} activeOpacity={0.7}>
                 <UserAvatar
                   uri={userImage || null}
                   size={46}
@@ -279,21 +294,23 @@ const ChatScreen = () => {
                   }`}
                 />
               </TouchableOpacity>
-              <View>
-                <Text className='text-primary dark:text-white font-roboto-semibold text-xl'>
-                  {userName}
-                </Text>
-                <View className='flex-row items-center gap-2'>
-                  <View
-                    className={`w-2 h-2 rounded-full ${
-                      isReceiverOnline ? 'bg-green-500' : 'bg-red-500'
-                    }`}
-                  />
-                  <Text className='text-xs text-secondary dark:text-white/80'>
-                    {isReceiverOnline ? tx(3, 'Online') : tx(4, 'Offline')}
+              <TouchableOpacity onPress={handleOpenPeerProfile} activeOpacity={0.7}>
+                <View>
+                  <Text className='text-primary dark:text-white font-roboto-semibold text-xl'>
+                    {userName}
                   </Text>
+                  <View className='flex-row items-center gap-2'>
+                    <View
+                      className={`w-2 h-2 rounded-full ${
+                        isReceiverOnline ? 'bg-green-500' : 'bg-red-500'
+                      }`}
+                    />
+                    <Text className='text-xs text-secondary dark:text-white/80'>
+                      {isReceiverOnline ? tx(3, 'Online') : tx(4, 'Offline')}
+                    </Text>
+                  </View>
                 </View>
-              </View>
+              </TouchableOpacity>
             </View>
             {!isPresenceConnected && (
               <View className='px-2 py-1 rounded-full bg-yellow-500/20 border border-yellow-500/40 mr-2'>
@@ -394,4 +411,9 @@ const ChatScreen = () => {
 };
 
 export default ChatScreen;
+
+
+
+
+
 

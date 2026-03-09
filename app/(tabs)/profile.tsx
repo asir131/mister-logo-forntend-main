@@ -15,7 +15,6 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import * as Linking from 'expo-linking';
 import { router } from 'expo-router';
-import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -30,21 +29,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const VideoGridItem = ({ uri }: { uri: string }) => {
-  const player = useVideoPlayer(uri, player => {
-    player.muted = true;
-    player.loop = true;
-  });
-
-  return (
-    <VideoView
-      style={{ width: '100%', height: '100%' }}
-      player={player}
-      nativeControls={false}
-      contentFit='cover'
-    />
-  );
-};
 
 const Profiles = () => {
   const { user } = useAuthStore();
@@ -187,16 +171,29 @@ const Profiles = () => {
   const [selectedType, setSelectedType] = useState<
     'photo' | 'video' | 'music' | 'all'
   >('all');
+  const [activeVideoPostId, setActiveVideoPostId] = useState('');
 
   // Map API posts to the format used in render
-  const displayPosts =
-    selectedType === 'photo'
-      ? profile?.imagePosts || []
-      : selectedType === 'video'
-        ? profile?.videoPosts || []
-        : selectedType === 'music'
-          ? profile?.audioPosts || []
-          : null; // 'all' will use myPosts hook
+  const displayPosts = React.useMemo(() => {
+    if (selectedType === 'photo') return profile?.imagePosts || [];
+    if (selectedType === 'video') return profile?.videoPosts || [];
+    if (selectedType === 'music') return profile?.audioPosts || [];
+    return null; // 'all' will use myPosts hook
+  }, [selectedType, profile?.imagePosts, profile?.videoPosts, profile?.audioPosts]);
+
+  React.useEffect(() => {
+    if (selectedType !== 'video' || !Array.isArray(displayPosts) || !displayPosts.length) {
+      setActiveVideoPostId('');
+      return;
+    }
+
+    const hasActive = displayPosts.some(
+      (item: any) => getGridItemId(item) === activeVideoPostId
+    );
+    if (!hasActive) {
+      setActiveVideoPostId(getGridItemId(displayPosts[0]));
+    }
+  }, [selectedType, displayPosts, activeVideoPostId]);
 
   // Get all posts for the 'all' tab
   const {
@@ -207,9 +204,18 @@ const Profiles = () => {
     isLoading: isMyPostsLoading,
     refetch: refetchMyPosts,
     isRefetching: isMyPostsRefetching,
-  } = useGetMyPostsInfinite({ limit: 10, enabled: selectedType === 'all' });
-  const allPosts =
-    myPostsData?.pages?.flatMap((page: any) => page?.posts || []) || [];
+  } = useGetMyPostsInfinite({
+    limit: 10,
+    enabled: selectedType === 'all' || selectedType === 'video',
+  });
+  const allPosts = React.useMemo(
+    () => myPostsData?.pages?.flatMap((page: any) => page?.posts || []) || [],
+    [myPostsData]
+  );
+  const feedStyleVideoPosts = React.useMemo(
+    () => allPosts.filter((post: any) => String(post?.mediaType || '') === 'video'),
+    [allPosts]
+  );
 
   const [showShareModal, setShowShareModal] = useState(false);
 
@@ -456,6 +462,24 @@ const Profiles = () => {
                     </Text>
                   ) : null}
                 </View>
+              ) : selectedType === 'video' ? (
+                <View className='gap-4'>
+                  {feedStyleVideoPosts.length > 0 ? (
+                    feedStyleVideoPosts.map((post: any) => (
+                      <PostCard
+                        key={post._id}
+                        post={post}
+                        currentUserId={user?.id}
+                        className='mb-4'
+                        showOwnerActions={true}
+                      />
+                    ))
+                  ) : !isMyPostsLoading ? (
+                    <Text className='text-primary dark:text-white font-roboto-regular mt-1'>
+                      {tx(16, 'No video posts found')}
+                    </Text>
+                  ) : null}
+                </View>
               ) : (
                 <View className='flex-row flex-wrap'>
                   {displayPosts && displayPosts.length > 0 ? (
@@ -477,21 +501,6 @@ const Profiles = () => {
                             }}
                             contentFit='cover'
                           />
-                        )}
-                        {selectedType === 'video' && (
-                          <View
-                            style={{ width: '100%', height: 130, padding: 2 }}
-                          >
-                            <VideoGridItem uri={item.mediaUrl} />
-                            <View className='absolute inset-0 items-center justify-center'>
-                              <Feather
-                                name='video'
-                                size={24}
-                                color={iconColor}
-                                opacity={0.7}
-                              />
-                            </View>
-                          </View>
                         )}
                         {selectedType === 'music' && (
                           <View className='p-4 bg-[#F0F2F5] dark:bg-[#FFFFFF0D] items-center justify-center w-full aspect-square'>

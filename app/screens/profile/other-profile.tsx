@@ -15,7 +15,7 @@ import { Image } from 'expo-image';
 import * as Linking from 'expo-linking';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -27,11 +27,51 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const VideoGridItem = ({ uri }: { uri: string }) => {
-  const player = useVideoPlayer(uri, player => {
+const toPlayableVideoUrl = (rawUrl?: string | null) => {
+  const url = String(rawUrl || '').trim();
+  if (!url) return '';
+
+  if (url.includes('/res.cloudinary.com/') && url.includes('/video/upload/')) {
+    if (url.includes('/video/upload/f_mp4,') || url.includes('/video/upload/f_mp4/')) {
+      return url;
+    }
+
+    return url.replace(
+      '/video/upload/',
+      '/video/upload/f_mp4,vc_h264,ac_aac,q_auto:good/'
+    );
+  }
+
+  return url;
+};
+
+const getGridMediaUrl = (item: any) =>
+  String(item?.mediaUrl || item?.url || item?.videoUrl || '');
+
+const getGridItemId = (item: any) =>
+  String(item?.postId || item?._id || item?.id || getGridMediaUrl(item));
+
+const VideoGridItem = ({
+  uri,
+  isActive,
+}: {
+  uri: string;
+  isActive: boolean;
+}) => {
+  const playbackUrl = React.useMemo(() => toPlayableVideoUrl(uri), [uri]);
+  const player = useVideoPlayer(playbackUrl, player => {
     player.muted = true;
     player.loop = true;
   });
+
+  React.useEffect(() => {
+    if (!playbackUrl) return;
+    if (!isActive) {
+      player.pause();
+      return;
+    }
+    player.play();
+  }, [player, playbackUrl, isActive]);
 
   return (
     <VideoView
@@ -39,6 +79,7 @@ const VideoGridItem = ({ uri }: { uri: string }) => {
       player={player}
       nativeControls={false}
       contentFit='cover'
+      surfaceType='textureView'
     />
   );
 };
@@ -207,6 +248,7 @@ const OtherProfile = () => {
   const [selectedType, setSelectedType] = useState<
     'photo' | 'video' | 'music'
   >('photo');
+  const [activeVideoPostId, setActiveVideoPostId] = useState('');
 
   useEffect(() => {
     setIsFollowing(viewerIsFollowingInitial);
@@ -227,12 +269,25 @@ const OtherProfile = () => {
     await refetch();
   };
 
-  const displayPosts =
-    selectedType === 'photo'
-      ? profile?.imagePosts || []
-      : selectedType === 'video'
-        ? profile?.videoPosts || []
-        : profile?.audioPosts || [];
+  const displayPosts = useMemo(() => {
+    if (selectedType === 'photo') return profile?.imagePosts || [];
+    if (selectedType === 'video') return profile?.videoPosts || [];
+    return profile?.audioPosts || [];
+  }, [selectedType, profile?.imagePosts, profile?.videoPosts, profile?.audioPosts]);
+
+  useEffect(() => {
+    if (selectedType !== 'video' || !Array.isArray(displayPosts) || !displayPosts.length) {
+      setActiveVideoPostId('');
+      return;
+    }
+
+    const hasActive = displayPosts.some(
+      (item: any) => getGridItemId(item) === activeVideoPostId
+    );
+    if (!hasActive) {
+      setActiveVideoPostId(getGridItemId(displayPosts[0]));
+    }
+  }, [selectedType, displayPosts, activeVideoPostId]);
 
 
   if (isLoading) {
@@ -482,19 +537,31 @@ const OtherProfile = () => {
                       />
                     )}
                     {selectedType === 'video' && (
-                      <View style={{ width: '100%', height: 130, padding: 2 }}>
-                        <VideoGridItem uri={item.mediaUrl} />
-                        <View className='absolute inset-0 items-center justify-center'>
-                          <Feather
-                            name='video'
-                            size={24}
-                            color={iconColor}
-                            opacity={0.7}
-                          />
-                        </View>
-                      </View>
-                    )}
-                    {selectedType === 'music' && (
+                          <TouchableOpacity
+                            activeOpacity={0.9}
+                            onPress={() =>
+                              setActiveVideoPostId(getGridItemId(item))
+                            }
+                            style={{ width: '100%', height: 130, padding: 2 }}
+                          >
+                            <VideoGridItem
+                              uri={getGridMediaUrl(item)}
+                              isActive={activeVideoPostId === getGridItemId(item)}
+                            />
+                            <View
+                              pointerEvents='none'
+                              className='absolute inset-0 items-center justify-center'
+                            >
+                              <Feather
+                                name='video'
+                                size={24}
+                                color={iconColor}
+                                opacity={0.7}
+                              />
+                            </View>
+                          </TouchableOpacity>
+                        )}
+                        {selectedType === 'music' && (
                       <View className='p-4 bg-[#F0F2F5] dark:bg-[#FFFFFF0D] items-center justify-center w-full aspect-square'>
                         <Feather name='music' size={40} color='#F54900' />
                         <Text className='text-black dark:text-white mt-2 text-center text-xs'>

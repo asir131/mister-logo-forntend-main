@@ -465,7 +465,7 @@ const ChatsList = () => {
                           <View className=' bg-[#007AFF] h-2 w-2 rounded-full' />
                         )}
                         <TouchableOpacity
-                          onPress={() => router.push('/(tabs)/profile')}
+                          onPress={() => handleOpenLocationProfile(chat?.userId)}
                           className='mt-2'
                         >
                           <View className='relative'>
@@ -478,12 +478,14 @@ const ChatsList = () => {
                           </View>
                         </TouchableOpacity>
                         <View className='w-5/6'>
-                          <Text
-                            className='text-primary dark:text-white font-roboto-semibold text-xl'
-                            numberOfLines={1}
-                          >
-                            {chat?.name}
-                          </Text>
+                          <TouchableOpacity onPress={() => handleOpenLocationProfile(chat?.userId)} activeOpacity={0.7}>
+                            <Text
+                              className='text-primary dark:text-white font-roboto-semibold text-xl'
+                              numberOfLines={1}
+                            >
+                              {chat?.name}
+                            </Text>
+                          </TouchableOpacity>
                           <Text
                             className='text-secondary dark:text-white/80 font-roboto-regular mt-1'
                             numberOfLines={1}
@@ -610,6 +612,10 @@ const ChatsList = () => {
 };
 
 export default ChatsList;
+
+
+
+
 
 
 
