@@ -20,6 +20,7 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
+  Share,
   ScrollView,
   RefreshControl,
   Text,
@@ -219,6 +220,25 @@ const Profiles = () => {
 
   const [showShareModal, setShowShareModal] = useState(false);
 
+  const handleShareProfile = async () => {
+    try {
+      const profileId = String(profile?.userId || profile?.id || user?.id || '').trim();
+      if (!profileId) return;
+
+      const profileDeepLink = Linking.createURL('/screens/profile/other-profile', {
+        queryParams: { id: profileId },
+      });
+
+      await Share.share({
+        message: `Check out this profile on UNAP: ${profileDeepLink}`,
+        url: profileDeepLink,
+      });
+    } catch (error) {
+      console.log('[profile] share profile failed', error);
+    }
+  };
+
+
   const isPullRefreshing =
     isProfileRefetching || (selectedType === 'all' && isMyPostsRefetching);
 
@@ -369,7 +389,7 @@ const Profiles = () => {
 
             {/* edit/share buttons */}
             {/* edit/share/saved buttons */}
-            <View className='flex-row justify-center items-center gap-3 mx-4'>
+            <View className='flex-row justify-center items-center gap-2 mx-4'>
               <ShadowButton
                 text={tx(4, 'Edit Profile')}
                 textColor='#2B2B2B'
@@ -384,6 +404,21 @@ const Profiles = () => {
                 onPress={() => router.push('/screens/profile/saved-posts')}
                 className={`mt-4 border flex-1 ${isLight ? 'border-black/20' : 'border-[#E6E6E6]'}`}
               />
+              <TouchableOpacity
+                onPress={handleShareProfile}
+                className={`mt-4 px-3 py-2 rounded-xl items-center justify-center border ${
+                  isLight ? 'bg-[#F0F2F5] border-black/20' : 'bg-[#000000] border-[#E6E6E6]'
+                }`}
+              >
+                <Ionicons
+                  name='share-social-outline'
+                  size={16}
+                  color={isLight ? '#111827' : '#E6E6E6'}
+                />
+                <Text className='text-[10px] mt-1 text-black dark:text-[#E6E6E6] font-roboto-medium'>
+                  Share
+                </Text>
+              </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => setShowShareModal(true)}
                 className={`mt-4 p-3 rounded-2xl items-center justify-center ${
@@ -563,24 +598,6 @@ const Profiles = () => {
                     </Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity
-                    onPress={() => {
-                      setShowShareModal(false);
-                      // Add share logic here if needed, for now just close
-                    }}
-                    className={`flex-row items-center gap-3 p-3 rounded-xl ${
-                      isLight ? 'bg-[#F0F2F5]' : 'bg-[#FFFFFF50]'
-                    }`}
-                  >
-                    <Ionicons
-                      name='share-outline'
-                      size={24}
-                      color={iconColor}
-                    />
-                    <Text className='text-black dark:text-white font-roboto-medium text-base'>
-                      {tx(8, 'Share Profile')}
-                    </Text>
-                  </TouchableOpacity>
 
                   <TouchableOpacity
                     onPress={() => setShowShareModal(false)}
@@ -599,4 +616,8 @@ const Profiles = () => {
 };
 
 export default Profiles;
+
+
+
+
 

@@ -193,7 +193,7 @@ const Settings = () => {
             </TouchableOpacity>
 
             {/* Complete Profile */}
-            <TouchableOpacity
+            {/* <TouchableOpacity
               onPress={() => router.push('/screens/profile/complete-profile')}
               className='flex-row justify-between items-center mt-6'
             >
@@ -214,7 +214,7 @@ const Settings = () => {
                 size={26}
                 color={iconColor}
               />
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
 
           {/* Policy Center */}

@@ -20,14 +20,18 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dimensions,
   FlatList,
+  Linking,
   Modal,
+  Platform,
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
+import Toast from 'react-native-toast-message';
 
 const { width, height } = Dimensions.get('window');
 
@@ -46,6 +50,7 @@ const StoryItem = ({
   const [comment, setComment] = useState('');
   const reaction = '❤️';
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [liked, setLiked] = useState(!!item.viewerHasLiked);
   const [likeCount, setLikeCount] = useState(item.likeCount || 0);
   const { mutateAsync: likeUCut, isPending: isLiking } = useLikeUCuts();
@@ -162,6 +167,118 @@ const StoryItem = ({
     }
   };
 
+  const openInstagramStoryShare = async () => {
+    const mediaUrl = String(item.storyImage || '');
+    const mediaType = String(item.mediaType || '').toLowerCase();
+    const appId = process.env.EXPO_PUBLIC_FACEBOOK_APP_ID || '';
+    const isHttpMedia = /^https?:\/\//i.test(mediaUrl);
+    if (!isHttpMedia || (mediaType !== 'image' && mediaType !== 'video')) {
+      return false;
+    }
+
+    try {
+      const canOpenStory = await Linking.canOpenURL('instagram-stories://share');
+      if (canOpenStory) {
+        const mediaParam =
+          mediaType === 'video' ? 'backgroundVideo' : 'backgroundImage';
+        const queryParts = [
+          `source_application=${encodeURIComponent(appId)}`,
+          `${mediaParam}=${encodeURIComponent(mediaUrl)}`,
+        ];
+        if (item.text) {
+          queryParts.push(`content_url=${encodeURIComponent(String(item.text))}`);
+        }
+        await Linking.openURL(`instagram-stories://share?${queryParts.join('&')}`);
+        return true;
+      }
+
+      const canOpenInstagram = await Linking.canOpenURL('instagram://');
+      if (canOpenInstagram) {
+        await Linking.openURL('instagram://camera');
+        return true;
+      }
+    } catch {
+      // no-op
+    }
+
+    return false;
+  };
+
+  const openFacebookStoryShare = async () => {
+    const mediaUrl = String(item.storyImage || '');
+    const mediaType = String(item.mediaType || '').toLowerCase();
+    const appId = process.env.EXPO_PUBLIC_FACEBOOK_APP_ID || '';
+    const isHttpMedia = /^https?:\/\//i.test(mediaUrl);
+    const canAttachMedia =
+      isHttpMedia && (mediaType === 'image' || mediaType === 'video');
+    if (!canAttachMedia) {
+      return false;
+    }
+
+    if (Platform.OS === 'android') {
+      try {
+        if (appId) {
+          await Linking.sendIntent('com.facebook.stories.ADD_TO_STORY', [
+            { key: 'com.facebook.platform.extra.APPLICATION_ID', value: appId },
+            { key: 'source_application', value: appId },
+            { key: 'interactive_asset_uri', value: mediaUrl },
+            { key: 'content_url', value: mediaUrl },
+          ]);
+          return true;
+        }
+      } catch {
+        // fall through to scheme-based attempt
+      }
+    }
+
+    try {
+      const canOpenStory = await Linking.canOpenURL('facebook-stories://share');
+      if (canOpenStory) {
+        const mediaParam =
+          mediaType === 'video' ? 'backgroundVideo' : 'backgroundImage';
+        const queryParts = [
+          `${mediaParam}=${encodeURIComponent(mediaUrl)}`,
+          `content_url=${encodeURIComponent(mediaUrl)}`,
+        ];
+        if (appId) {
+          queryParts.push(`app_id=${encodeURIComponent(appId)}`);
+          queryParts.push(`source_application=${encodeURIComponent(appId)}`);
+        }
+        await Linking.openURL(`facebook-stories://share?${queryParts.join('&')}`);
+        return true;
+      }
+    } catch {
+      // no-op
+    }
+
+    return false;
+  };
+
+  const handleShareStoryTarget = async (
+    target: 'instagram_story' | 'facebook_story'
+  ) => {
+    setShowShareModal(false);
+    const success =
+      target === 'instagram_story'
+        ? await openInstagramStoryShare()
+        : await openFacebookStoryShare();
+
+    if (success) {
+      Toast.show({
+        type: 'success',
+        text1: target === 'instagram_story' ? 'Instagram Opened' : 'Facebook Opened',
+        text2: 'Story share screen opened.',
+      });
+      return;
+    }
+
+    Toast.show({
+      type: 'error',
+      text1: 'Share Unavailable',
+      text2: 'App install/login and valid media are required.',
+    });
+  };
+
   return (
     <View style={{ width, height }} className='bg-black'>
       {item.mediaType === 'video' ? (
@@ -242,6 +359,12 @@ const StoryItem = ({
                 size={20}
                 color='white'
               />
+            </TouchableOpacity>
+            <TouchableOpacity
+              className='w-11 h-11 rounded-full items-center justify-center bg-white/15'
+              onPress={() => setShowShareModal(true)}
+            >
+              <Ionicons name='share-social-outline' size={20} color='white' />
             </TouchableOpacity>
           </View>
         </View>
@@ -343,6 +466,48 @@ const StoryItem = ({
               />
             </View>
           </View>
+        </Modal>
+        <Modal
+          visible={showShareModal}
+          transparent
+          animationType='fade'
+          onRequestClose={() => setShowShareModal(false)}
+        >
+          <TouchableWithoutFeedback onPress={() => setShowShareModal(false)}>
+            <View className='flex-1 bg-black/50 justify-end'>
+              <TouchableWithoutFeedback>
+                <View className='bg-white dark:bg-[#111111] p-6 rounded-t-3xl'>
+                  <Text className='text-black dark:text-white font-roboto-semibold text-lg mb-4'>
+                    Share UCut
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => handleShareStoryTarget('instagram_story')}
+                    className='py-3 px-4 rounded-xl bg-[#F0F2F5] dark:bg-white/10 mb-3'
+                  >
+                    <Text className='text-black dark:text-white font-roboto-medium'>
+                      Share to Instagram Story
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleShareStoryTarget('facebook_story')}
+                    className='py-3 px-4 rounded-xl bg-[#F0F2F5] dark:bg-white/10 mb-3'
+                  >
+                    <Text className='text-black dark:text-white font-roboto-medium'>
+                      Share to Facebook Story
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setShowShareModal(false)}
+                    className='mt-1 py-3 px-4 rounded-xl border border-black/10 dark:border-white/10'
+                  >
+                    <Text className='text-center text-black dark:text-white font-roboto-medium'>
+                      Cancel
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
         </Modal>
       </SafeAreaView>
     </View>

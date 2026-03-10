@@ -417,12 +417,35 @@ const PostCard = ({
     return base ? `${base}/share/${post._id}` : '';
   };
 
+  const buildPostDeepLink = () => {
+    if (!post?._id) return '';
+    return ExpoLinking.createURL('/screens/home/post-detail', {
+      queryParams: { postId: String(post._id) },
+    });
+  };
+
   const buildSharePayload = () => {
     const description = post?.description?.trim() || '';
     const mediaUrl = post?.mediaUrl?.trim() || '';
-    const shareUrl = buildPublicShareUrl();
+    const publicShareUrl = buildPublicShareUrl();
+    const deepLink = buildPostDeepLink();
+    const shareUrl = deepLink || publicShareUrl;
     const message = [description, shareUrl || mediaUrl].filter(Boolean).join('\n');
-    return { description, mediaUrl, shareUrl, message };
+    return { description, mediaUrl, shareUrl, publicShareUrl, message };
+  };
+
+  const handleShareLinkOnly = async () => {
+    const { shareUrl, mediaUrl } = buildSharePayload();
+    const link = shareUrl || mediaUrl;
+    if (!link) return;
+    try {
+      await Share.share({
+        message: link,
+        url: link,
+      });
+    } catch {
+      // no-op
+    }
   };
 
   const openFacebookShare = async () => {
@@ -519,11 +542,11 @@ const PostCard = ({
   };
 
   const openTwitterShare = async () => {
-    const { description, mediaUrl, shareUrl, message } = buildSharePayload();
+    const { description, mediaUrl, shareUrl, publicShareUrl, message } = buildSharePayload();
 
     try {
       const tweetText = description || message || '';
-      const targetUrl = shareUrl || mediaUrl;
+      const targetUrl = publicShareUrl || shareUrl || mediaUrl;
       const canOpenTwitterApp =
         (await Linking.canOpenURL('twitter://')) ||
         (await Linking.canOpenURL('x://'));
@@ -962,6 +985,26 @@ const PostCard = ({
                 <Text className='text-black dark:text-white font-roboto-semibold text-lg mb-4'>
                   {uiTexts(5, 'Share Post')}
                 </Text>
+                <View className='mb-3 p-3 rounded-xl border border-black/10 dark:border-white/10 bg-[#F8FAFC] dark:bg-white/5'>
+                  <Text className='text-black dark:text-white/80 font-roboto-medium text-xs mb-1'>
+                    Post Link
+                  </Text>
+                  <Text
+                    selectable
+                    numberOfLines={2}
+                    className='text-black dark:text-white text-xs'
+                  >
+                    {buildSharePayload().shareUrl || buildSharePayload().mediaUrl || '-'}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={handleShareLinkOnly}
+                    className='self-start mt-2 py-2 px-3 rounded-lg bg-[#F0F2F5] dark:bg-white/10'
+                  >
+                    <Text className='text-black dark:text-white font-roboto-medium text-xs'>
+                      Share Link
+                    </Text>
+                  </TouchableOpacity>
+                </View>
                 <ScrollView
                   style={{ maxHeight: 380 }}
                   showsVerticalScrollIndicator={false}
@@ -1546,6 +1589,9 @@ const arePostCardPropsEqual = (prev: PostCardProps, next: PostCardProps) => {
 };
 
 export default React.memo(PostCard, arePostCardPropsEqual);
+
+
+
 
 
 

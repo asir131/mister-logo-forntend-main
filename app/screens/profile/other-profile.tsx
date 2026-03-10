@@ -20,6 +20,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   RefreshControl,
+  Share,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -264,6 +265,22 @@ const OtherProfile = () => {
     setIsFollowing(!isFollowing);
   };
 
+  const handleShareProfile = async () => {
+    try {
+      if (!safeProfileId) return;
+
+      const profileDeepLink = Linking.createURL('/screens/profile/other-profile', {
+        queryParams: { id: safeProfileId },
+      });
+
+      await Share.share({
+        message: `Check out this profile on UNAP: ${profileDeepLink}`,
+        url: profileDeepLink,
+      });
+    } catch (error) {
+      console.log('[other-profile] share profile failed', error);
+    }
+  };
   const handleRefresh = async () => {
     if (!safeProfileId) return;
     await refetch();
@@ -442,7 +459,7 @@ const OtherProfile = () => {
             <View className='border-b border-black/20 dark:border-[#292929] w-[90%] my-3 mx-6'></View>
 
             {/* follow/message buttons */}
-            <View className='flex-row justify-center items-center gap-5 mx-6'>
+            <View className='flex-row justify-center items-center gap-3 mx-6'>
               <ShadowButton
                 text={isFollowing ? tx(5, 'Unfollow') : tx(4, 'Follow')}
                 textColor={isFollowing ? '#000000' : '#2B2B2B'}
@@ -470,6 +487,21 @@ const OtherProfile = () => {
                 }}
                 className={`mt-4 border ${isLight ? 'border-black/20' : 'border-[#E6E6E6]'}`}
               />
+              <TouchableOpacity
+                onPress={handleShareProfile}
+                className={`mt-4 px-3 py-2 rounded-xl items-center justify-center border ${
+                  isLight ? 'bg-[#F0F2F5] border-black/20' : 'bg-[#000000] border-[#E6E6E6]'
+                }`}
+              >
+                <Ionicons
+                  name='share-social-outline'
+                  size={16}
+                  color={isLight ? '#111827' : '#E6E6E6'}
+                />
+                <Text className='text-[10px] mt-1 text-black dark:text-[#E6E6E6] font-roboto-medium'>
+                  Share
+                </Text>
+              </TouchableOpacity>
             </View>
 
             {/* border */}
@@ -589,4 +621,5 @@ const OtherProfile = () => {
 };
 
 export default OtherProfile;
+
 

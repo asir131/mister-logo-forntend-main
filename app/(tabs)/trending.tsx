@@ -120,6 +120,8 @@ const TrendingScreen = () => {
       'Expired',
       'Sharing...',
       'Pay',
+      'You are currently blocked from submitting to UBlast until',
+      'because you have not shared the most recent UBlast. Share the current UBlast to become eligible again.',
     ],
     targetLang: language,
     enabled: !!language && language !== 'EN',
@@ -174,6 +176,21 @@ const TrendingScreen = () => {
   });
 
   const [isEligible, setIsEligible] = useState(true);
+
+  const getBlockedUntilText = (blockedUntil?: string | null) => {
+    if (!blockedUntil) return '';
+    const date = new Date(blockedUntil);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString();
+  };
+
+  const getNotEligibleMessage = (blockedUntil?: string | null) => {
+    const blockedUntilText = getBlockedUntilText(blockedUntil);
+    if (blockedUntilText) {
+      return `${tx(42, 'You are currently blocked from submitting to UBlast until')} ${blockedUntilText} ${tx(43, 'because you have not shared the most recent UBlast. Share the current UBlast to become eligible again.')}`;
+    }
+    return tx(6, 'Complete your profile to be eligible');
+  };
 
   useEffect(() => {
     if (typeof (eligibilityData as any)?.eligible === 'boolean') {
@@ -399,11 +416,7 @@ const TrendingScreen = () => {
                   ? tx(4, 'Checking your eligibility status')
                   : isEligible
                     ? tx(5, 'You can participate in trending posts')
-                    : (eligibilityData as any)?.blockedUntil
-                      ? `${tx(7, 'Blocked until')} ${new Date(
-                          (eligibilityData as any).blockedUntil
-                        ).toLocaleString()}`
-                      : tx(6, 'Complete your profile to be eligible')}
+                    : getNotEligibleMessage((eligibilityData as any)?.blockedUntil)}
               </Text>
               {!isEligibilityLoading && isEligible ? (
                 <Text className='font-roboto-semibold text-green-600 dark:text-green-400 text-sm mt-1'>
@@ -579,7 +592,7 @@ const TrendingScreen = () => {
           Toast.show({
             type: 'error',
             text1: tx(3, 'Not Eligible'),
-            text2: 'You are not eligible to share UBlast now',
+            text2: getNotEligibleMessage(eligibilitySnapshot?.blockedUntil),
           });
           setShowShareTypeModal(false);
           return;
@@ -621,7 +634,7 @@ const TrendingScreen = () => {
           Toast.show({
             type: 'error',
             text1: tx(3, 'Not Eligible'),
-            text2: 'You are not eligible to share UBlast now',
+            text2: getNotEligibleMessage(eligibilitySnapshot?.blockedUntil),
           });
         }
       } finally {
@@ -791,7 +804,7 @@ const TrendingScreen = () => {
                     Toast.show({
                       type: 'error',
                       text1: tx(3, 'Not Eligible'),
-                      text2: 'You are not eligible to share UBlast now',
+                      text2: getNotEligibleMessage(eligibilitySnapshot?.blockedUntil),
                     });
                     return;
                   }
@@ -1006,7 +1019,7 @@ const TrendingScreen = () => {
                         (Boolean((sharedPost as any)?.ublastId) ||
                           String((sharedPost as any)?.postType || '').toLowerCase() === 'ublast')
                       }
-                      shareDisabledMessage='You are not eligible to share UBlast now'
+                      shareDisabledMessage={getNotEligibleMessage((eligibilityData as any)?.blockedUntil)}
                     />
                   );
                 }
@@ -1029,7 +1042,7 @@ const TrendingScreen = () => {
                     (Boolean((item as any)?.ublastId) ||
                       String((item as any)?.postType || '').toLowerCase() === 'ublast')
                   }
-                  shareDisabledMessage='You are not eligible to share UBlast now'
+                  shareDisabledMessage={getNotEligibleMessage((eligibilityData as any)?.blockedUntil)}
                 />
               );
             }}
