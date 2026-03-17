@@ -29,7 +29,9 @@ import * as ExpoLinking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { router } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { toProxyMediaUrl } from '@/lib/mediaProxy';
+import useMediaPreviewStore from '@/store/mediaPreview.store';
 import {
   Alert,
   GestureResponderEvent,
@@ -70,6 +72,7 @@ interface Post {
   likeCount: number;
   mediaType: 'image' | 'video' | 'audio';
   mediaUrl: string;
+  mediaPreviewUrl?: string;
   profile: Profile;
   viewerHasLiked: boolean;
   viewerIsFollowing: boolean;
@@ -93,6 +96,8 @@ type PostCardProps = {
   officeVariant?: boolean;
   disableShare?: boolean;
   shareDisabledMessage?: string;
+  preferPreview?: boolean;
+  isActiveVideo?: boolean;
 };
 
 const toPlayableVideoUrl = (rawUrl?: string) => {
@@ -127,6 +132,8 @@ const PostCard = ({
   officeVariant = false,
   disableShare = false,
   shareDisabledMessage,
+  preferPreview = true,
+  isActiveVideo,
 }: PostCardProps) => {
   const [isFollowing, setIsFollowing] = useState(
     post?.viewerIsFollowing || false
@@ -143,6 +150,9 @@ const PostCard = ({
   const [videoDurationSec, setVideoDurationSec] = useState(0);
   const [videoProgressWidth, setVideoProgressWidth] = useState(0);
   const isCardActive = isVisible !== false;
+  const isVideoActive = isCardActive && isActiveVideo !== false;
+  const debugLoggedRef = useRef(new Set<string>());
+  const lastPlaybackRef = useRef<string>('');
 
   const {
     data: commentData,
@@ -157,18 +167,99 @@ const PostCard = ({
   const { mutate: deleteComment } = useDeleteComment();
 
   const rawMediaUrl = String(post?.mediaUrl || '').trim();
+  const rawPreviewUrl = String(post?.mediaPreviewUrl || '').trim();
+  const localPreview = useMediaPreviewStore(state =>
+    post?._id ? state.previews[String(post._id)] : undefined
+  );
+  const proxyMediaUrl = toProxyMediaUrl(rawMediaUrl);
+  const proxyPreviewUrl = rawPreviewUrl ? toProxyMediaUrl(rawPreviewUrl) : '';
+  const displayMediaUrl = proxyMediaUrl || rawMediaUrl;
+  const displayPreviewUrl = proxyPreviewUrl || rawPreviewUrl;
+  const localPreviewUri = localPreview?.uri || '';
+  const localThumbnailUri = localPreview?.thumbnailUri || '';
+  const displayLocalPreviewUrl =
+    localPreviewUri && /^https?:\/\//i.test(localPreviewUri)
+      ? toProxyMediaUrl(localPreviewUri) || localPreviewUri
+      : localPreviewUri;
+  const LOCAL_PREVIEW_MAX_BYTES = 80 * 1024 * 1024;
+  const shouldUseLocalPreview =
+    Boolean(displayLocalPreviewUrl) &&
+    (localPreview?.sizeBytes == null || localPreview.sizeBytes <= LOCAL_PREVIEW_MAX_BYTES);
+  const effectivePreviewUrl =
+    displayPreviewUrl || (shouldUseLocalPreview ? displayLocalPreviewUrl : '') || '';
   const shouldUsePlayer =
     post?.mediaType === 'video' || post?.mediaType === 'audio';
+  const shouldUsePreview = post?.mediaType === 'video' && preferPreview;
+  const hasVideoPreview =
+    post?.mediaType === 'video' &&
+    (shouldUsePreview ? Boolean(effectivePreviewUrl) : true);
   const mediaPlaybackUrl = shouldUsePlayer
     ? post?.mediaType === 'video'
-      ? toPlayableVideoUrl(rawMediaUrl)
-      : rawMediaUrl
+      ? toPlayableVideoUrl(
+          shouldUsePreview ? effectivePreviewUrl || displayMediaUrl : displayMediaUrl
+        )
+      : displayMediaUrl
     : '';
+  const safePlaybackUrl =
+    post?.mediaType === 'video' && !hasVideoPreview ? '' : mediaPlaybackUrl;
+  const playbackUrl =
+    post?.mediaType === 'video' && isActiveVideo === false ? '' : safePlaybackUrl;
 
   // Video player setup
-  const player = useVideoPlayer(mediaPlaybackUrl, player => {
+  const player = useVideoPlayer(playbackUrl, player => {
     player.loop = true;
   });
+
+  useEffect(() => {
+    if (!__DEV__) return;
+    const debugKey = `${String(post?._id || '')}:${String(post?.mediaType || '')}`;
+    if (!debugKey || debugLoggedRef.current.has(debugKey)) return;
+    debugLoggedRef.current.add(debugKey);
+    console.log('[video][postcard:init]', {
+      id: post?._id,
+      mediaType: post?.mediaType,
+      isVisible,
+      isActiveVideo,
+      hasVideoPreview,
+      rawMediaUrl,
+      rawPreviewUrl,
+      displayMediaUrl,
+      displayPreviewUrl,
+      localPreviewUri,
+      localThumbnailUri,
+      effectivePreviewUrl,
+      mediaPlaybackUrl,
+      safePlaybackUrl,
+    });
+  }, [
+    post?._id,
+    post?.mediaType,
+    isVisible,
+    isActiveVideo,
+    hasVideoPreview,
+    rawMediaUrl,
+    rawPreviewUrl,
+    displayMediaUrl,
+    displayPreviewUrl,
+    localPreviewUri,
+    localThumbnailUri,
+    effectivePreviewUrl,
+    mediaPlaybackUrl,
+    safePlaybackUrl,
+  ]);
+
+  useEffect(() => {
+    if (!__DEV__) return;
+    const next = safePlaybackUrl || '';
+    if (next && lastPlaybackRef.current !== next) {
+      console.log('[video][postcard:playback-ready]', {
+        id: post?._id,
+        mediaType: post?.mediaType,
+        safePlaybackUrl: next,
+      });
+      lastPlaybackRef.current = next;
+    }
+  }, [safePlaybackUrl, post?._id, post?.mediaType]);
 
   const { mutate: followUser } = useUserFollow();
   const { mutate: unfollowUser } = useUserUnFollow();
@@ -222,14 +313,28 @@ const PostCard = ({
     const effectiveVisible = isVisible !== false;
 
     if (post?.mediaType === 'video') {
-      if (!effectiveVisible) {
+      if (!effectiveVisible || isActiveVideo === false || !safePlaybackUrl) {
         player.pause();
+        if (__DEV__) {
+          console.log('[video][postcard] pause', {
+            id: post?._id,
+            isVisible: effectiveVisible,
+            isActiveVideo,
+            safePlaybackUrl,
+          });
+        }
         return;
       }
       if (isVideoPaused) {
         player.pause();
+        if (__DEV__) {
+          console.log('[video][postcard] paused-by-user', { id: post?._id });
+        }
       } else {
         player.play();
+        if (__DEV__) {
+          console.log('[video][postcard] play', { id: post?._id });
+        }
       }
       return;
     }
@@ -237,7 +342,15 @@ const PostCard = ({
     if (post?.mediaType === 'audio' && !effectiveVisible) {
       player.pause();
     }
-  }, [isVisible, post?.mediaType, player, shouldUsePlayer, isVideoPaused]);
+  }, [
+    isVisible,
+    isActiveVideo,
+    post?.mediaType,
+    player,
+    shouldUsePlayer,
+    isVideoPaused,
+    safePlaybackUrl,
+  ]);
 
   useEffect(() => {
     if (post?.mediaType !== 'video') return;
@@ -246,19 +359,25 @@ const PostCard = ({
 
   useEffect(() => {
     if (post?.mediaType !== 'video') return;
+    if (!isCardActive || isActiveVideo === false || !safePlaybackUrl) return;
+
     const timer = setInterval(() => {
-      const duration = Number((player as any)?.duration || 0);
-      const currentTime = Number((player as any)?.currentTime || 0);
-      if (Number.isFinite(duration) && duration >= 0) {
-        setVideoDurationSec(duration);
+      try {
+        const duration = Number((player as any)?.duration || 0);
+        const currentTime = Number((player as any)?.currentTime || 0);
+        if (Number.isFinite(duration) && duration >= 0) {
+          setVideoDurationSec(duration);
+        }
+        if (Number.isFinite(currentTime) && currentTime >= 0) {
+          setVideoCurrentSec(currentTime);
+        }
+      } catch {
+        // player may be released when card unmounts; ignore safely
       }
-      if (Number.isFinite(currentTime) && currentTime >= 0) {
-        setVideoCurrentSec(currentTime);
-      }
-    }, 300);
+    }, 500);
 
     return () => clearInterval(timer);
-  }, [post?.mediaType, player]);
+  }, [post?.mediaType, player, isCardActive, isActiveVideo, safePlaybackUrl]);
 
   const toggleVideoPlayback = () => {
     setIsVideoPaused((prev) => !prev);
@@ -426,7 +545,7 @@ const PostCard = ({
 
   const buildSharePayload = () => {
     const description = post?.description?.trim() || '';
-    const mediaUrl = post?.mediaUrl?.trim() || '';
+    const mediaUrl = proxyMediaUrl || post?.mediaUrl?.trim() || '';
     const publicShareUrl = buildPublicShareUrl();
     const deepLink = buildPostDeepLink();
     const shareUrl = deepLink || publicShareUrl;
@@ -749,7 +868,7 @@ const PostCard = ({
       } else if (target === 'story') {
         await createUcut({
           text: post?.description || '',
-          mediaUrl: post?.mediaUrl || undefined,
+          mediaUrl: rawMediaUrl || undefined,
           mediaType: post?.mediaType || undefined,
         });
       } else if (target === 'facebook_story') {
@@ -762,7 +881,7 @@ const PostCard = ({
           });
           return;
         }
-        if (post?.mediaType === 'audio' || !post?.mediaUrl) {
+        if (post?.mediaType === 'audio' || !rawMediaUrl) {
           Toast.show({
             type: 'error',
             text1: 'Facebook Story unavailable',
@@ -851,7 +970,7 @@ const PostCard = ({
   const authorProfession = post?.profile?.role || '';
   const authorAvatar = String(post?.profile?.profileImageUrl || '').trim();
   const postText = String(post?.description || '').trim();
-  const postImage = post?.mediaUrl || img;
+  const postImage = displayMediaUrl || img;
   const timestamp = post?.createdAt
     ? new Date(post.createdAt).toLocaleDateString()
     : '';
@@ -1266,7 +1385,29 @@ const PostCard = ({
           />
         )}
 
-        {post?.mediaType === 'video' && mediaPlaybackUrl && (
+        {post?.mediaType === 'video' && !hasVideoPreview && (
+          <View className='w-full h-[345px] bg-black/10 dark:bg-white/5 items-center justify-center overflow-hidden'>
+            {localThumbnailUri ? (
+              <Image
+                source={{ uri: localThumbnailUri }}
+                style={{ width: '100%', height: '100%' }}
+                contentFit='cover'
+              />
+            ) : null}
+            <View className='absolute inset-0 items-center justify-center'>
+              <View className='items-center gap-2 px-4 py-3 rounded-2xl bg-black/60'>
+                <Ionicons name='pause' size={26} color='white' />
+                <Text className='text-white text-xs font-roboto-medium text-center'>
+                  video is under process
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {post?.mediaType === 'video' &&
+          safePlaybackUrl &&
+          isVideoActive && (
           <View style={{ width: '100%', height: 345 }}>
             <VideoView
               style={{ width: '100%', height: 345 }}
@@ -1326,8 +1467,23 @@ const PostCard = ({
             </View>
           </View>
         )}
+        {post?.mediaType === 'video' && safePlaybackUrl && !isVideoActive && (
+          <View className='w-full h-[345px] bg-black/10 dark:bg-white/5 items-center justify-center overflow-hidden'>
+            {localThumbnailUri ? (
+              <Image
+                source={{ uri: localThumbnailUri }}
+                style={{ width: '100%', height: '100%' }}
+                contentFit='cover'
+              />
+            ) : (
+              <View className='w-14 h-14 rounded-full bg-black/55 items-center justify-center'>
+                <Ionicons name='play' size={26} color='white' />
+              </View>
+            )}
+          </View>
+        )}
 
-        {post?.mediaType === 'audio' && post?.mediaUrl && (
+        {post?.mediaType === 'audio' && displayMediaUrl && (
           <View className='bg-[#F0F2F5] dark:bg-white/5 p-6 rounded-2xl mx-3 items-center flex-row gap-4'>
             <TouchableOpacity
               className='bg-primary/20 p-3 rounded-full'
@@ -1565,6 +1721,7 @@ const arePostCardPropsEqual = (prev: PostCardProps, next: PostCardProps) => {
   if (prev.officeVariant !== next.officeVariant) return false;
   if (prev.disableShare !== next.disableShare) return false;
   if (prev.shareDisabledMessage !== next.shareDisabledMessage) return false;
+  if (prev.isActiveVideo !== next.isActiveVideo) return false;
 
   const prevPost = prev.post;
   const nextPost = next.post;

@@ -10,14 +10,19 @@ import {
 } from '@/hooks/app/post';
 import {
   type CloudinaryUploadResponse,
+  useCreateResumableUpload,
+  uploadFileToResumableSession,
   useUploadSignature,
   useUploadVideoToCloudinary,
 } from '@/hooks/app/uploads';
 import { useTranslateTexts } from '@/hooks/app/translate';
 import { useCreateUCuts } from '@/hooks/app/ucuts';
 import { getShortErrorMessage } from '@/lib/error';
+import { toProxyMediaUrl } from '@/lib/mediaProxy';
 import useThemeStore from '@/store/theme.store';
 import useLanguageStore from '@/store/language.store';
+import api from '@/api/axiosInstance';
+import useMediaPreviewStore from '@/store/mediaPreview.store';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import Feather from '@expo/vector-icons/Feather';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -28,6 +33,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
+import * as VideoThumbnails from 'expo-video-thumbnails';
 import * as Sharing from 'expo-sharing';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -42,6 +48,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
+import { useQueryClient } from '@tanstack/react-query';
+import { useIsFocused } from '@react-navigation/native';
 
 const CreatePost = () => {
   const { mode: colorMode } = useThemeStore();
@@ -51,6 +59,9 @@ const CreatePost = () => {
   const resetKey = params.reset as string | undefined;
   const isEditMode = !!params.postId;
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const setLocalPreview = useMediaPreviewStore(state => state.setPreview);
+  const isFocused = useIsFocused();
 
   // Selection mode: 'selection' | 'post-create'
   const [mode, setMode] = useState<'selection' | 'post-create'>(
@@ -89,12 +100,16 @@ const CreatePost = () => {
   const [videoName, setVideoName] = useState<string | null>(null);
   const [videoPlayerUri, setVideoPlayerUri] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [videoThumbnailUri, setVideoThumbnailUri] = useState<string | null>(null);
+  const [playLargePreview, setPlayLargePreview] = useState(false);
 
   const { mutate: createPost, isPending: isCreating } = useCreatePost();
   const { mutate: createPostByUrl, isPending: isCreatingByUrl } =
     useCreatePostByUrl();
   const { mutateAsync: requestSignature, isPending: isSigning } =
     useUploadSignature();
+  const { mutateAsync: requestResumableSession, isPending: isResumableSigning } =
+    useCreateResumableUpload();
   const { mutateAsync: uploadVideo, isPending: isUploadingVideo } =
     useUploadVideoToCloudinary();
   const { mutate: updateScheduledPost, isPending: isUpdatingScheduled } =
@@ -108,6 +123,7 @@ const CreatePost = () => {
     isEditingPublished ||
     isCreatingByUrl ||
     isSigning ||
+    isResumableSigning ||
     isUploadingVideo ||
     isCreatingUcut;
 
@@ -204,7 +220,7 @@ const CreatePost = () => {
   useEffect(() => {
     if (isEditMode && params.mediaUrl && params.mediaType) {
       const type = params.mediaType as string;
-      const url = params.mediaUrl as string;
+      const url = toProxyMediaUrl(params.mediaUrl as string);
       if (type === 'image') {
         setPhoto(url);
       } else if (type === 'video') {
@@ -217,6 +233,12 @@ const CreatePost = () => {
       }
     }
   }, [isEditMode, params]);
+
+  useEffect(() => {
+    if (!isFocused) {
+      setPlayLargePreview(false);
+    }
+  }, [isFocused]);
 
   useEffect(() => {
     if (postType === 'uclip') {
@@ -266,6 +288,7 @@ const CreatePost = () => {
   };
 
   const BIG_VIDEO_BYTES = 50 * 1024 * 1024;
+  const LOCAL_PREVIEW_MAX_BYTES = 80 * 1024 * 1024;
   const CLOUDINARY_DIRECT_MAX_BYTES = 100 * 1024 * 1024;
 
   const resolveVideoSizeBytes = async (
@@ -294,6 +317,39 @@ const CreatePost = () => {
     if (isSnapchat) targets.push('snapchat');
     if (isTikTok) targets.push('tiktok');
     return targets;
+  };
+
+  const uploadVideoResumable = async ({
+    uri,
+    fileName,
+    contentType,
+    size,
+    folder,
+  }: {
+    uri: string;
+    fileName: string | null;
+    contentType: string;
+    size: number | null;
+    folder: string;
+  }) => {
+    const session = await requestResumableSession({
+      folder,
+      fileName,
+      contentType,
+    });
+    if (!session?.uploadUrl) {
+      throw new Error('Could not start resumable upload.');
+    }
+    setUploadProgress(2);
+    await uploadFileToResumableSession({
+      uploadUrl: session.uploadUrl,
+      fileUri: uri,
+      contentType: session.contentType || contentType,
+      contentLength: size,
+      onProgress: (percent) => setUploadProgress(percent),
+    });
+    setUploadProgress(96);
+    return session.publicUrl;
   };
 
   const shareToInstagramPersonal = async (mediaUri: string) => {
@@ -336,7 +392,41 @@ const CreatePost = () => {
     setIsScheduleMode(false);
     setVideoSize(null);
     setVideoName(null);
+    setVideoThumbnailUri(null);
+    setPlayLargePreview(false);
   };
+
+  const kickPreviewAndPoll = async (postId?: string) => {
+    if (!postId) return;
+    try {
+      await api.post(`/api/posts/${postId}/preview`);
+    } catch {
+      return;
+    }
+
+    const startedAt = Date.now();
+    const maxWaitMs = 5000;
+    while (Date.now() - startedAt < maxWaitMs) {
+      try {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const res: any = await api.get(`/api/posts/${postId}`);
+        const post = res?.post || res?.data?.post || res;
+        if (post?.mediaPreviewUrl) {
+          queryClient.invalidateQueries({ queryKey: ['post'] });
+          break;
+        }
+      } catch {
+        // ignore polling errors
+      }
+    }
+  };
+
+  const getLocalPreviewUri = () => {
+    if (!video) return '';
+    return videoPlayerUri || video || '';
+  };
+
+  const getLocalThumbnailUri = () => videoThumbnailUri || '';
 
   // moved to hooks: useUploadSignature, useUploadVideoToCloudinary
 
@@ -383,14 +473,44 @@ const CreatePost = () => {
         : `image/${ext === 'png' ? 'png' : 'jpeg'}`;
 
       try {
-        await createUcut({
-          text: description.trim(),
-          media: {
-            uri: sourceUri,
-            name: fileName,
-            type: mimeType,
-          },
-        });
+        if (isVideo) {
+          const effectiveVideoSize = await resolveVideoSizeBytes(
+            videoPlayerUri || sourceUri,
+            videoSize
+          );
+          if (!effectiveVideoSize || effectiveVideoSize > BIG_VIDEO_BYTES) {
+            const mediaUrl = await uploadVideoResumable({
+              uri: sourceUri,
+              fileName,
+              contentType: mimeType,
+              size: effectiveVideoSize,
+              folder: 'unap/ucuts',
+            });
+            await createUcut({
+              text: description.trim(),
+              mediaUrl,
+              mediaType: 'video',
+            });
+          } else {
+            await createUcut({
+              text: description.trim(),
+              media: {
+                uri: sourceUri,
+                name: fileName,
+                type: mimeType,
+              },
+            });
+          }
+        } else {
+          await createUcut({
+            text: description.trim(),
+            media: {
+              uri: sourceUri,
+              name: fileName,
+              type: mimeType,
+            },
+          });
+        }
 
         resetCreateForm();
         alert(tx(47, 'UCuts') + ' created successfully!');
@@ -431,6 +551,81 @@ const CreatePost = () => {
         videoPlayerUri || video,
         videoSize
       );
+
+      const shouldTryResumable =
+        !isEditMode &&
+        (effectiveVideoSize === null || effectiveVideoSize > BIG_VIDEO_BYTES);
+
+      if (shouldTryResumable) {
+        try {
+          const filename = video.split('/').pop() || 'video.mp4';
+          const match = /\.(\w+)$/.exec(filename);
+          const ext = match?.[1]?.toLowerCase() || 'mp4';
+          const contentType = `video/${ext === 'mov' ? 'quicktime' : 'mp4'}`;
+          console.log('[create] Uploading video via GCS resumable', {
+            size: effectiveVideoSize,
+          });
+          setUploadProgress(0);
+          const mediaUrl = await uploadVideoResumable({
+            uri: video,
+            fileName: videoName || filename,
+            contentType,
+            size: effectiveVideoSize,
+            folder: 'mister/posts',
+          });
+          createPostByUrl(
+            {
+              description,
+              mediaUrl,
+              mediaType: 'video',
+              shareTargets,
+              postType: isUclip ? 'uclip' : undefined,
+              scheduledFor: isScheduleMode
+                ? scheduledDate.toISOString()
+                : undefined,
+            },
+            {
+              onSuccess: async (data: any) => {
+                const created = data?.post || data?.data?.post || data;
+                const localPreviewUri = getLocalPreviewUri();
+                if (created?._id && localPreviewUri) {
+                  setLocalPreview(
+                    String(created._id),
+                    localPreviewUri,
+                    videoSize,
+                    getLocalThumbnailUri()
+                  );
+                }
+                if (created?.mediaType === 'video' && !created?.mediaPreviewUrl) {
+                  await kickPreviewAndPoll(created?._id || created?.id);
+                }
+                if (shouldShareToInstagramApp && instagramMediaUri) {
+                  shareToInstagramPersonal(instagramMediaUri);
+                }
+                resetCreateForm();
+                alert(
+                  isScheduleMode
+                    ? tx(29, 'Post scheduled successfully!')
+                    : tx(30, 'Post created successfully!')
+                );
+                setMode('selection');
+              },
+              onError: (error: any) => {
+                Toast.show({
+                  type: 'error',
+                  text1: tx(31, 'Post Creation Failed'),
+                  text2: getShortErrorMessage(error, 'Request failed.'),
+                });
+                setUploadProgress(null);
+              },
+            }
+          );
+          return;
+        } catch (err: any) {
+          console.log('[create] Resumable upload failed, falling back', err);
+          setUploadProgress(null);
+        }
+      }
 
       const shouldUseCloudinaryDirect =
         !isEditMode &&
@@ -474,7 +669,20 @@ const CreatePost = () => {
                 : undefined,
             },
             {
-              onSuccess: () => {
+              onSuccess: async (data: any) => {
+                const created = data?.post || data?.data?.post || data;
+                const localPreviewUri = getLocalPreviewUri();
+                if (created?._id && localPreviewUri) {
+                  setLocalPreview(
+                    String(created._id),
+                    localPreviewUri,
+                    videoSize,
+                    getLocalThumbnailUri()
+                  );
+                }
+                if (created?.mediaType === 'video' && !created?.mediaPreviewUrl) {
+                  await kickPreviewAndPoll(created?._id || created?.id);
+                }
                 if (shouldShareToInstagramApp && instagramMediaUri) {
                   shareToInstagramPersonal(instagramMediaUri);
                 }
@@ -626,16 +834,29 @@ const CreatePost = () => {
       }
     } else {
       setUploadProgress(0);
-      createPost(
-        {
-          formData,
-          onUploadProgress: percent => setUploadProgress(percent),
-        },
-        {
-        onSuccess: () => {
-          if (shouldShareToInstagramApp && instagramMediaUri) {
-            shareToInstagramPersonal(instagramMediaUri);
-          }
+        createPost(
+          {
+            formData,
+            onUploadProgress: percent => setUploadProgress(percent),
+          },
+          {
+          onSuccess: async (data: any) => {
+          const created = data?.post || data?.data?.post || data;
+          const localPreviewUri = getLocalPreviewUri();
+            if (created?._id && localPreviewUri) {
+              setLocalPreview(
+                String(created._id),
+                localPreviewUri,
+                videoSize,
+                getLocalThumbnailUri()
+              );
+            }
+            if (created?.mediaType === 'video' && !created?.mediaPreviewUrl) {
+              await kickPreviewAndPoll(created?._id || created?.id);
+            }
+            if (shouldShareToInstagramApp && instagramMediaUri) {
+              shareToInstagramPersonal(instagramMediaUri);
+            }
 
           setPhoto(null);
           setVideo(null);
@@ -712,6 +933,8 @@ const pickVideo = async () => {
     setVideoPlayerUri(null);
     setVideoSize(null);
     setVideoName(null);
+    setVideoThumbnailUri(null);
+    setPlayLargePreview(false);
     setPhoto(null);
     setAudio(null);
 
@@ -746,6 +969,21 @@ const pickVideo = async () => {
     setVideoPlayerUri(previewUri);
     setVideoSize(resolvedSize);
     setVideoName(pickedName);
+
+    if (resolvedSize && resolvedSize > LOCAL_PREVIEW_MAX_BYTES) {
+      try {
+        const { uri: thumbUri } = await VideoThumbnails.getThumbnailAsync(rawUri, {
+          time: 1000,
+          quality: 0.5,
+        });
+        setVideoThumbnailUri(thumbUri);
+      } catch (err) {
+        console.log('[pickVideo] thumbnail error', err);
+        setVideoThumbnailUri(null);
+      }
+    } else {
+      setVideoThumbnailUri(null);
+    }
   } catch (error) {
     console.error('[pickVideo] Error:', error);
     Toast.show({
@@ -767,11 +1005,13 @@ const pickPhoto = async () => {
   }
   
   // Clear all media states first
-  setVideo(null);
-  setVideoPlayerUri(null);
-  setVideoSize(null);
-  setVideoName(null);
-  setAudio(null);
+    setVideo(null);
+    setVideoPlayerUri(null);
+    setVideoSize(null);
+    setVideoName(null);
+    setVideoThumbnailUri(null);
+    setPlayLargePreview(false);
+    setAudio(null);
   
   try {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -937,7 +1177,7 @@ const pickAudio = async () => {
           {/* border */}
           <View className='border-b border-black/20 dark:border-[#FFFFFF0D] w-full mt-2'></View>
 
-          {isLoading && uploadProgress !== null && (
+          {uploadProgress !== null && (
             <View className='px-6 mt-3'>
               <View className='bg-[#F0F2F5] dark:bg-[#FFFFFF0D] rounded-lg p-3'>
                 <Text className='text-black dark:text-white text-sm'>
@@ -1118,26 +1358,100 @@ const pickAudio = async () => {
                   </View>
                 ) : (videoPlayerUri || video) ? (
                   <View className='w-full h-[300px] justify-center items-center bg-black/10 dark:bg-[#FFFFFF0D] rounded-2xl mb-4 overflow-hidden relative'>
-                    <Video
-                      source={{ uri: videoPlayerUri || video || '' }}
-                      style={{ width: '100%', height: '100%' }}
-                      useNativeControls
-                      resizeMode={ResizeMode.CONTAIN}
-                      shouldPlay={false}
-                      isLooping={false}
-                      onError={(error) => {
-                        console.log('[create][video-preview] load error', {
-                          rawUri: video,
-                          previewUri: videoPlayerUri,
-                          error,
-                        });
-                        Toast.show({
-                          type: 'error',
-                          text1: 'Preview Error',
-                          text2: 'Could not load video preview on this device.',
-                        });
-                      }}
-                    />
+                    {videoSize && videoSize > LOCAL_PREVIEW_MAX_BYTES ? (
+                      <View className='w-full h-full'>
+                        {playLargePreview ? (
+                          <Video
+                            source={{ uri: videoPlayerUri || video || '' }}
+                            style={{ width: '100%', height: '100%' }}
+                            resizeMode={ResizeMode.CONTAIN}
+                            shouldPlay={Boolean(isFocused)}
+                            isLooping={true}
+                            isMuted={true}
+                            usePoster={Boolean(videoThumbnailUri)}
+                            posterSource={
+                              videoThumbnailUri
+                                ? { uri: videoThumbnailUri }
+                                : undefined
+                            }
+                            progressUpdateIntervalMillis={500}
+                            onError={(error) => {
+                              console.log('[create][video-preview] load error', {
+                                rawUri: video,
+                                previewUri: videoPlayerUri,
+                                error,
+                              });
+                              Toast.show({
+                                type: 'error',
+                                text1: 'Preview Error',
+                                text2:
+                                  'Could not load video preview on this device.',
+                              });
+                              setPlayLargePreview(false);
+                            }}
+                            onPlaybackStatusUpdate={(status) => {
+                              const s = status as any;
+                              if (!s?.isLoaded) return;
+                              if (s.positionMillis >= 5000) {
+                                setPlayLargePreview(false);
+                              }
+                            }}
+                          />
+                        ) : videoThumbnailUri ? (
+                          <Image
+                            source={{ uri: videoThumbnailUri }}
+                            style={{ width: '100%', height: '100%' }}
+                            contentFit='cover'
+                            cachePolicy='none'
+                          />
+                        ) : (
+                          <View className='items-center justify-center h-full'>
+                            <Text className='text-black dark:text-white text-sm'>
+                              Large video selected (preview disabled).
+                            </Text>
+                          </View>
+                        )}
+
+                        <TouchableOpacity
+                          activeOpacity={0.8}
+                          onPress={() => setPlayLargePreview(true)}
+                          className='absolute inset-0 items-center justify-center'
+                        >
+                          <View className='bg-black/50 px-4 py-2 rounded-full'>
+                            <Text className='text-white text-xs'>
+                              Tap to preview (5s)
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <Video
+                        source={{ uri: videoPlayerUri || video || '' }}
+                        style={{ width: '100%', height: '100%' }}
+                        useNativeControls={false}
+                        resizeMode={ResizeMode.CONTAIN}
+                        shouldPlay={Boolean(isFocused)}
+                        isLooping={true}
+                        isMuted={true}
+                        usePoster={Boolean(videoThumbnailUri)}
+                        posterSource={
+                          videoThumbnailUri ? { uri: videoThumbnailUri } : undefined
+                        }
+                        progressUpdateIntervalMillis={500}
+                        onError={(error) => {
+                          console.log('[create][video-preview] load error', {
+                            rawUri: video,
+                            previewUri: videoPlayerUri,
+                            error,
+                          });
+                          Toast.show({
+                            type: 'error',
+                            text1: 'Preview Error',
+                            text2: 'Could not load video preview on this device.',
+                          });
+                        }}
+                      />
+                    )}
                   </View>
                 ) : (
                   <MediaPreview

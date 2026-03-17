@@ -15,8 +15,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import UserAvatar from '@/components/ui/UserAvatar';
 import * as Location from 'expo-location';
 import { router } from 'expo-router';
-import Mapbox from '@rnmapbox/maps';
 import React, { useMemo, useState } from 'react';
+import { toProxyMediaUrl } from '@/lib/mediaProxy';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -32,7 +32,14 @@ import Toast from 'react-native-toast-message';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || '';
-if (MAPBOX_TOKEN) {
+let Mapbox: any = null;
+try {
+  // Lazy require so Expo Go doesn't crash when native module isn't available.
+  Mapbox = require('@rnmapbox/maps');
+} catch {
+  Mapbox = null;
+}
+if (Mapbox && MAPBOX_TOKEN) {
   Mapbox.setAccessToken(MAPBOX_TOKEN);
 }
 
@@ -200,6 +207,9 @@ const ChatsList = () => {
   const fullMapCenter = mySharedCoordinate || mapCenter;
   const fullMapZoom = mySharedCoordinate ? 13 : mapZoom;
   const hasMapboxToken = MAPBOX_TOKEN.length > 0;
+  const isMapboxAvailable = Boolean(Mapbox && Mapbox.MapView);
+  const canUseMapbox = isMapboxAvailable && hasMapboxToken;
+  const mapFallbackLabel = !isMapboxAvailable ? 'Map view unavailable' : 'Mapbox token missing';
 
   const lastMessageTexts = useMemo(
     () => filteredChats.map((chat: any) => String(chat?.lastMessage?.text || '')),
@@ -348,7 +358,7 @@ const ChatsList = () => {
 
           <View className='mx-6 mt-4'>
             <View className='w-full h-[140px] rounded-2xl overflow-hidden border border-black/20 dark:border-[#FFFFFF1A] bg-[#E6EEF8] dark:bg-[#1A2433]'>
-              {hasMapboxToken ? (
+              {canUseMapbox ? (
                 <Mapbox.MapView
                   style={{ flex: 1 }}
                   styleURL={Mapbox.StyleURL.Street}
@@ -380,7 +390,7 @@ const ChatsList = () => {
                         <View className='h-7 w-7 rounded-full overflow-hidden border border-white bg-[#111827]'>
                           {location.profileImageUrl ? (
                             <Image
-                              source={{ uri: String(location.profileImageUrl) }}
+                              source={{ uri: toProxyMediaUrl(String(location.profileImageUrl)) }}
                               style={{ width: '100%', height: '100%' }}
                             />
                           ) : (
@@ -401,7 +411,7 @@ const ChatsList = () => {
               ) : (
                 <View className='flex-1 items-center justify-center'>
                   <Text className='text-black/60 dark:text-white/60 text-xs'>
-                    Mapbox token missing
+                    {mapFallbackLabel}
                   </Text>
                 </View>
               )}
@@ -414,7 +424,7 @@ const ChatsList = () => {
                 </View>
               )}
 
-              {hasMapboxToken && (
+              {canUseMapbox && (
                 <TouchableOpacity
                   activeOpacity={0.9}
                   onPress={() => setFullMapVisible(true)}
@@ -530,7 +540,7 @@ const ChatsList = () => {
                   </TouchableOpacity>
                 </View>
 
-                {hasMapboxToken ? (
+                {canUseMapbox ? (
                   <View className='h-[320px] rounded-2xl overflow-hidden'>
                     <Mapbox.MapView
                       style={{ flex: 1 }}
@@ -559,7 +569,7 @@ const ChatsList = () => {
                             <View className='h-9 w-9 rounded-full overflow-hidden border border-white bg-[#111827]'>
                               {location.profileImageUrl ? (
                                 <Image
-                                  source={{ uri: String(location.profileImageUrl) }}
+                                  source={{ uri: toProxyMediaUrl(String(location.profileImageUrl)) }}
                                   style={{ width: '100%', height: '100%' }}
                                 />
                               ) : (
@@ -581,7 +591,7 @@ const ChatsList = () => {
                 ) : (
                   <View className='h-[220px] items-center justify-center bg-[#E6EEF8] dark:bg-[#1A2433] rounded-2xl'>
                     <Text className='text-black/60 dark:text-white/60'>
-                      Mapbox token missing
+                      {mapFallbackLabel}
                     </Text>
                   </View>
                 )}

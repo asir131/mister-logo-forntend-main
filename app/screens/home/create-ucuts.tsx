@@ -3,15 +3,18 @@ import GradientBackground from '@/components/main/GradientBackground';
 import UserAvatar from '@/components/ui/UserAvatar';
 import { useGetMyProfile } from '@/hooks/app/profile';
 import { useCreateUCuts } from '@/hooks/app/ucuts';
+import { useCreateResumableUpload, uploadFileToResumableSession } from '@/hooks/app/uploads';
 import { useTranslateTexts } from '@/hooks/app/translate';
 import useLanguageStore from '@/store/language.store';
 import useThemeStore from '@/store/theme.store';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { router } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useEffect, useState } from 'react';
+import * as VideoThumbnails from 'expo-video-thumbnails';
 import {
   Dimensions,
   Text,
@@ -59,7 +62,42 @@ const CreateStory = () => {
     type: string;
     mediaType: 'image' | 'video';
   } | null>(null);
+  const [selectedMediaSize, setSelectedMediaSize] = useState<number | null>(null);
+  const [selectedMediaThumbnail, setSelectedMediaThumbnail] = useState<string | null>(null);
   const { mutateAsync: createUCuts, isPending } = useCreateUCuts();
+  const { mutateAsync: requestResumableSession } = useCreateResumableUpload();
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+
+  const uploadVideoResumable = async ({
+    uri,
+    fileName,
+    contentType,
+  }: {
+    uri: string;
+    fileName: string;
+    contentType: string;
+  }) => {
+    const info: any = await FileSystem.getInfoAsync(uri, { size: true } as any);
+    const size = typeof info?.size === 'number' ? info.size : null;
+    const session = await requestResumableSession({
+      folder: 'unap/ucuts',
+      fileName,
+      contentType,
+    });
+    if (!session?.uploadUrl) {
+      throw new Error('Could not start resumable upload.');
+    }
+    setUploadProgress(2);
+    await uploadFileToResumableSession({
+      uploadUrl: session.uploadUrl,
+      fileUri: uri,
+      contentType: session.contentType || contentType,
+      contentLength: size,
+      onProgress: (percent) => setUploadProgress(percent),
+    });
+    setUploadProgress(96);
+    return session.publicUrl;
+  };
 
   const previewPlayer = useVideoPlayer(
     selectedMedia?.mediaType === 'video' ? selectedMedia.uri : '',
@@ -104,6 +142,8 @@ const CreateStory = () => {
       const name = asset.fileName || `ucuts-${Date.now()}.${ext}`;
       const type =
         asset.mimeType || (mediaType === 'video' ? 'video/mp4' : 'image/jpeg');
+      const info: any = await FileSystem.getInfoAsync(asset.uri, { size: true } as any);
+      const size = typeof info?.size === 'number' ? info.size : null;
 
       setSelectedMedia({
         uri: asset.uri,
@@ -111,6 +151,21 @@ const CreateStory = () => {
         type,
         mediaType,
       });
+      setSelectedMediaSize(size);
+      if (mediaType === 'video' && size && size > 50 * 1024 * 1024) {
+        try {
+          const { uri: thumbUri } = await VideoThumbnails.getThumbnailAsync(asset.uri, {
+            time: 1000,
+            quality: 0.5,
+          });
+          setSelectedMediaThumbnail(thumbUri);
+        } catch (err) {
+          console.log('[ucuts] thumbnail error', err);
+          setSelectedMediaThumbnail(null);
+        }
+      } else {
+        setSelectedMediaThumbnail(null);
+      }
     }
   };
 
@@ -124,14 +179,32 @@ const CreateStory = () => {
       return;
     }
 
-    await createUCuts({
-      text: text.trim(),
-      media: {
-        uri: selectedMedia.uri,
-        name: selectedMedia.name,
-        type: selectedMedia.type,
-      },
-    });
+    if (selectedMedia.mediaType === 'video') {
+      try {
+        const mediaUrl = await uploadVideoResumable({
+          uri: selectedMedia.uri,
+          fileName: selectedMedia.name,
+          contentType: selectedMedia.type,
+        });
+        await createUCuts({
+          text: text.trim(),
+          mediaUrl,
+          mediaType: 'video',
+        });
+      } finally {
+        setUploadProgress(100);
+        setTimeout(() => setUploadProgress(null), 500);
+      }
+    } else {
+      await createUCuts({
+        text: text.trim(),
+        media: {
+          uri: selectedMedia.uri,
+          name: selectedMedia.name,
+          type: selectedMedia.type,
+        },
+      });
+    }
     router.back();
   };
 
@@ -171,7 +244,24 @@ const CreateStory = () => {
               className='overflow-hidden items-center justify-center bg-black/30 rounded-2xl'
               style={{ width: STORY_PREVIEW_WIDTH, height: STORY_PREVIEW_HEIGHT }}
             >
-              {selectedMedia.mediaType === 'image' ? (
+              {selectedMedia.mediaType === 'video' &&
+              selectedMediaSize &&
+              selectedMediaSize > 50 * 1024 * 1024 &&
+              selectedMediaThumbnail ? (
+                <Image
+                  source={{ uri: selectedMediaThumbnail }}
+                  style={{ width: '100%', height: '100%' }}
+                  contentFit='cover'
+                />
+              ) : selectedMedia.mediaType === 'video' &&
+              selectedMediaSize &&
+              selectedMediaSize > 50 * 1024 * 1024 ? (
+                <View className='items-center justify-center'>
+                  <Text className='text-black dark:text-white text-sm'>
+                    Large video selected (preview disabled).
+                  </Text>
+                </View>
+              ) : selectedMedia.mediaType === 'image' ? (
                 <Image
                   source={{ uri: selectedMedia.uri }}
                   style={{ width: '100%', height: '100%' }}
@@ -185,7 +275,11 @@ const CreateStory = () => {
                 />
               )}
               <TouchableOpacity
-                onPress={() => setSelectedMedia(null)}
+                onPress={() => {
+                  setSelectedMedia(null);
+                  setSelectedMediaSize(null);
+                  setSelectedMediaThumbnail(null);
+                }}
                 className='absolute top-5 right-5 bg-black/50 p-2.5 rounded-full'
               >
                 <Ionicons
@@ -218,7 +312,13 @@ const CreateStory = () => {
         {selectedMedia && (
           <View className='px-6 pb-10'>
             <ShadowButton
-              text={isPending ? tx(2, 'Sharing...') : tx(3, 'Share to UCuts')}
+              text={
+                uploadProgress !== null
+                  ? `${tx(2, 'Sharing...')} ${uploadProgress}%`
+                  : isPending
+                    ? tx(2, 'Sharing...')
+                    : tx(3, 'Share to UCuts')
+              }
               onPress={handlePostStory}
               className='w-full'
             />

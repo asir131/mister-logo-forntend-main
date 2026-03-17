@@ -8,6 +8,7 @@ import useLanguageStore from '@/store/language.store';
 import useAuthStore from '@/store/auth.store';
 import useNotificationStore from '@/store/notification.store';
 import useThemeStore from '@/store/theme.store';
+import { toProxyMediaUrl } from '@/lib/mediaProxy';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -233,7 +234,9 @@ const Notification = () => {
         name: item.title || 'Notification',
         reson: item.body || '',
         time: formatRelativeTime(item.createdAt),
-        img: typeof item?.data?.profileImageUrl === 'string' ? item.data.profileImageUrl : null,
+        img: typeof item?.data?.profileImageUrl === 'string'
+          ? toProxyMediaUrl(item.data.profileImageUrl)
+          : null,
         type: normalizeNotificationType(item),
         isRead: item.read,
         userId:

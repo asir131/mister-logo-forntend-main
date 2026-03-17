@@ -7,6 +7,7 @@ import StorySection from '@/components/main/StorySection';
 import { useGetAllPost } from '@/hooks/app/home';
 import { useGetMyProfile, useGetSuggestedArtists } from '@/hooks/app/profile';
 import { useTranslateTexts } from '@/hooks/app/translate';
+import api from '@/api/axiosInstance';
 import useAuthStore from '@/store/auth.store';
 import useLanguageStore from '@/store/language.store';
 import useNotificationStore from '@/store/notification.store';
@@ -14,7 +15,7 @@ import useThemeStore from '@/store/theme.store';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -62,6 +63,7 @@ export interface Post {
   likeCount: number;
   mediaType: 'image' | 'video' | 'audio';
   mediaUrl: string;
+  mediaPreviewUrl?: string;
   profile: Profile;
   viewerHasLiked: boolean;
   viewerIsFollowing: boolean;
@@ -93,7 +95,12 @@ const Home = () => {
   const queryClient = useQueryClient();
   const [isSearchVisible, setIsSearchVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
+  const [isSearchLoading, setIsSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState(false);
   const [visiblePostIds, setVisiblePostIds] = useState<Set<string>>(new Set());
+  const [activeVideoPostId, setActiveVideoPostId] = useState<string>('');
+  const activeVideoPostIdRef = useRef<string>('');
   const searchAnim = React.useRef(new Animated.Value(0)).current;
   const { data: t } = useTranslateTexts({
     texts: ["What's on your mind?", 'No posts found', 'Search users...'],
@@ -121,6 +128,24 @@ const Home = () => {
       return true;
     });
   }, [data]);
+
+  useEffect(() => {
+    if (!posts.length) {
+      if (activeVideoPostId) setActiveVideoPostId('');
+      return;
+    }
+    const hasActive = activeVideoPostId
+      ? posts.some(item => String(item?._id || '') === String(activeVideoPostId))
+      : false;
+    if (!hasActive) {
+      const firstVideo = posts.find(item => String(item?.mediaType || '') === 'video');
+      const fallback = firstVideo?._id || posts[0]?._id || '';
+      setActiveVideoPostId(fallback ? String(fallback) : '');
+    }
+  }, [posts, activeVideoPostId]);
+  useEffect(() => {
+    activeVideoPostIdRef.current = String(activeVideoPostId || '');
+  }, [activeVideoPostId]);
 
   const searchableUsers = useMemo<SearchUser[]>(() => {
     const unique = new Map<string, SearchUser>();
@@ -157,21 +182,24 @@ const Home = () => {
   const filteredPosts = posts;
 
   const matchedUsers = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
+    const query = searchQuery.trim();
     if (!query) return [];
+    if (searchResults.length > 0 || isSearchLoading) return searchResults;
+    if (!searchError) return [];
 
+    const normalized = query.toLowerCase();
     return searchableUsers
       .map(item => {
         const name = String(item?.name || '').toLowerCase().trim();
         const username = String(item?.username || '').toLowerCase().trim();
 
         let score = 99;
-        if (username === query) score = 0;
-        else if (name === query) score = 1;
-        else if (username.startsWith(query)) score = 2;
-        else if (name.startsWith(query)) score = 3;
-        else if (username.includes(query)) score = 4;
-        else if (name.includes(query)) score = 5;
+        if (username === normalized) score = 0;
+        else if (name === normalized) score = 1;
+        else if (username.startsWith(normalized)) score = 2;
+        else if (name.startsWith(normalized)) score = 3;
+        else if (username.includes(normalized)) score = 4;
+        else if (name.includes(normalized)) score = 5;
 
         return {
           ...item,
@@ -190,7 +218,56 @@ const Home = () => {
         return a.name.localeCompare(b.name);
       })
       .slice(0, 8);
-  }, [searchableUsers, searchQuery]);
+  }, [searchableUsers, searchQuery, searchResults, isSearchLoading, searchError]);
+
+  React.useEffect(() => {
+    let isActive = true;
+    const query = searchQuery.trim();
+
+    if (!isSearchVisible || !query) {
+      setSearchResults([]);
+      setIsSearchLoading(false);
+      setSearchError(false);
+      return () => {
+        isActive = false;
+      };
+    }
+
+    const timeoutId = setTimeout(async () => {
+      if (!isActive) return;
+      setIsSearchLoading(true);
+      setSearchError(false);
+      try {
+        const response: any = await api.get('/api/users/search', {
+          params: { q: query, limit: 8 },
+        });
+        if (!isActive) return;
+        const users = Array.isArray(response?.users) ? response.users : [];
+        setSearchResults(
+          users.map((user: any) => ({
+            userId: String(user?.userId || user?.id || ''),
+            name: String(user?.name || 'User'),
+            username: String(user?.username || ''),
+            profileImageUrl: String(user?.profileImageUrl || ''),
+          }))
+        );
+      } catch (err) {
+        if (!isActive) return;
+        console.log('Search users failed:', err);
+        setSearchResults([]);
+        setSearchError(true);
+      } finally {
+        if (isActive) {
+          setIsSearchLoading(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      isActive = false;
+      clearTimeout(timeoutId);
+    };
+  }, [searchQuery, isSearchVisible]);
 
   const handleOpenSearchUser = useCallback(
     (targetUserId: string) => {
@@ -406,13 +483,17 @@ const Home = () => {
               className='mt-4'
               currentUserId={user?.id}
               isVisible={isFocused && isItemVisible}
+              isActiveVideo={
+                item?.mediaType === 'video' &&
+                String(item._id) === String(activeVideoPostId)
+              }
             />
           )}
           {index === 1 ? <SuggestedArtistsCard className='mt-4' /> : null}
         </View>
       );
     },
-    [user?.id, isFocused, visiblePostIds]
+    [user?.id, isFocused, visiblePostIds, activeVideoPostId]
   );
 
   const listFooter = useMemo(() => {
@@ -449,10 +530,21 @@ const Home = () => {
   const onViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       const nextIds = new Set<string>();
+      let firstVisibleVideoId = '';
 
       viewableItems.forEach(viewable => {
-        const id = String((viewable?.item as Post | undefined)?._id || '');
-        if (id) nextIds.add(id);
+        const item = viewable?.item as Post | undefined;
+        const id = String(item?._id || '');
+        if (id) {
+          nextIds.add(id);
+          if (
+            !firstVisibleVideoId &&
+            String(item?.mediaType || '') === 'video' &&
+            Boolean(item?.mediaPreviewUrl)
+          ) {
+            firstVisibleVideoId = id;
+          }
+        }
       });
 
       setVisiblePostIds(prevIds => {
@@ -469,6 +561,11 @@ const Home = () => {
 
         return nextIds;
       });
+      if (firstVisibleVideoId && firstVisibleVideoId !== activeVideoPostIdRef.current) {
+        setActiveVideoPostId(firstVisibleVideoId);
+      } else if (!firstVisibleVideoId && activeVideoPostIdRef.current) {
+        setActiveVideoPostId('');
+      }
     }
   ).current;
 
@@ -510,10 +607,10 @@ const Home = () => {
             viewabilityConfig={viewabilityConfigRef.current}
             showsVerticalScrollIndicator={false}
             refreshing={isRefetching}
-            initialNumToRender={4}
-            maxToRenderPerBatch={4}
-            windowSize={5}
-            updateCellsBatchingPeriod={50}
+            initialNumToRender={2}
+            maxToRenderPerBatch={2}
+            windowSize={3}
+            updateCellsBatchingPeriod={120}
             removeClippedSubviews={true}
             onRefresh={onRefresh}
             ListEmptyComponent={

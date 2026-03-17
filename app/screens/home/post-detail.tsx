@@ -71,6 +71,7 @@ const PostDetailScreen = () => {
                 className='mt-4'
                 currentUserId={user?.id}
                 isVisible
+                preferPreview={false}
               />
             )}
           </ScrollView>

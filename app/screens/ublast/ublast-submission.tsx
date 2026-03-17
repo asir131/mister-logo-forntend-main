@@ -9,7 +9,9 @@ import {
   useSubmitUBlast,
   useUpdateUBlastPost,
 } from '@/hooks/app/ublast';
+import { useCreateResumableUpload, uploadFileToResumableSession } from '@/hooks/app/uploads';
 import { useTranslateTexts } from '@/hooks/app/translate';
+import { toProxyMediaUrl } from '@/lib/mediaProxy';
 import useLanguageStore from '@/store/language.store';
 import useThemeStore from '@/store/theme.store';
 import AntDesign from '@expo/vector-icons/AntDesign';
@@ -17,6 +19,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import * as DocumentPicker from 'expo-document-picker';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as VideoThumbnails from 'expo-video-thumbnails';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -95,6 +99,8 @@ const UBlastSubmission = () => {
   const [video, setVideo] = useState<string | null>(null);
   const [audio, setAudio] = useState<string | null>(null);
   const [videoPlayerUri, setVideoPlayerUri] = useState<string | null>(null);
+  const [videoSize, setVideoSize] = useState<number | null>(null);
+  const [videoThumbnailUri, setVideoThumbnailUri] = useState<string | null>(null);
   const [isFacebook, setIsFacebook] = useState(
     params.shareToFacebook === 'true'
   );
@@ -111,6 +117,8 @@ const UBlastSubmission = () => {
   const { mutate: submitUBlast, isPending: isSubmitting } = useSubmitUBlast();
   const { mutate: updateUBlastPost, isPending: isUpdating } =
     useUpdateUBlastPost();
+  const { mutateAsync: requestResumableSession } = useCreateResumableUpload();
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
   const {
     data: ublastData,
@@ -126,6 +134,7 @@ const UBlastSubmission = () => {
     ublastData?.pages?.flatMap((page: any) => page?.submissions || []) || [];
 
   const isLoading = isSubmitting || isUpdating;
+  const BIG_VIDEO_BYTES = 50 * 1024 * 1024;
   const [nowMs, setNowMs] = useState(Date.now());
 
   const blockedUntilRaw = (eligibilityData as any)?.blockedUntil;
@@ -164,7 +173,7 @@ const UBlastSubmission = () => {
   useEffect(() => {
     if (isEditMode && params.mediaUrl && params.mediaType) {
       const type = params.mediaType as string;
-      const url = params.mediaUrl as string;
+      const url = toProxyMediaUrl(params.mediaUrl as string);
       if (type === 'image') {
         setPhoto(url);
       } else if (type === 'video') {
@@ -203,11 +212,16 @@ const UBlastSubmission = () => {
       return;
     }
 
-    const formData = new FormData();
-
     const isRemote = (uri: string) => uri.startsWith('http');
 
+    const payload: any = {
+      content: description,
+      title: 'UBlast Post',
+      proposedDate: scheduledDateTime.toISOString(),
+    };
+
     if (photo && !isRemote(photo)) {
+      const formData = new FormData();
       const filename = photo.split('/').pop() || 'photo.jpg';
       const match = /\.(\w+)$/.exec(filename);
       const ext = match?.[1]?.toLowerCase() || 'jpg';
@@ -216,18 +230,34 @@ const UBlastSubmission = () => {
         name: filename,
         type: `image/${ext === 'png' ? 'png' : 'jpeg'}`,
       } as any);
-      // formData.append('mediaType', 'image');
-    } else if (video && !isRemote(video)) {
-      const filename = video.split('/').pop() || 'video.mp4';
-      const match = /\.(\w+)$/.exec(filename);
-      const ext = match?.[1]?.toLowerCase() || 'mp4';
-      formData.append('media', {
-        uri: video,
-        name: filename,
-        type: `video/${ext === 'mov' ? 'quicktime' : 'mp4'}`,
-      } as any);
-      // formData.append('mediaType', 'video');
-    } else if (audio && !isRemote(audio)) {
+      formData.append('content', description);
+      formData.append('title', 'UBlast Post');
+      formData.append('proposedDate', scheduledDateTime.toISOString());
+
+      if (isEditMode) {
+        updateUBlastPost(
+          { postId: params.postId as string, formData },
+          {
+            onSuccess: () => {
+              resetForm();
+              refetchUBlast();
+              router.back();
+            },
+          }
+        );
+      } else {
+        submitUBlast(formData, {
+          onSuccess: () => {
+            resetForm();
+            refetchUBlast();
+          },
+        });
+      }
+      return;
+    }
+
+    if (audio && !isRemote(audio)) {
+      const formData = new FormData();
       const filename = audio.split('/').pop() || 'audio.mp3';
       const match = /\.(\w+)$/.exec(filename);
       const ext = match?.[1]?.toLowerCase() || 'mp3';
@@ -236,22 +266,97 @@ const UBlastSubmission = () => {
         name: filename,
         type: `audio/${ext === 'wav' ? 'wav' : 'mpeg'}`,
       } as any);
-      // formData.append('mediaType', 'audio');
+      formData.append('content', description);
+      formData.append('title', 'UBlast Post');
+      formData.append('proposedDate', scheduledDateTime.toISOString());
+
+      if (isEditMode) {
+        updateUBlastPost(
+          { postId: params.postId as string, formData },
+          {
+            onSuccess: () => {
+              resetForm();
+              refetchUBlast();
+              router.back();
+            },
+          }
+        );
+      } else {
+        submitUBlast(formData, {
+          onSuccess: () => {
+            resetForm();
+            refetchUBlast();
+          },
+        });
+      }
+      return;
     }
 
-    formData.append('content', description);
-    formData.append('title', 'UBlast Post');
+    if (video && !isRemote(video)) {
+      const filename = video.split('/').pop() || 'video.mp4';
+      const match = /\.(\w+)$/.exec(filename);
+      const ext = match?.[1]?.toLowerCase() || 'mp4';
+      const contentType = `video/${ext === 'mov' ? 'quicktime' : 'mp4'}`;
+      const info: any = await FileSystem.getInfoAsync(video, { size: true } as any);
+      const size = typeof info?.size === 'number' ? info.size : null;
+      if (!size || size > BIG_VIDEO_BYTES) {
+        const session = await requestResumableSession({
+          folder: 'unap/ublast-submissions',
+          fileName: filename,
+          contentType,
+        });
+        if (!session?.uploadUrl) {
+          Alert.alert('Error', 'Could not start resumable upload.');
+          return;
+        }
+        setUploadProgress(2);
+        await uploadFileToResumableSession({
+          uploadUrl: session.uploadUrl,
+          fileUri: video,
+          contentType: session.contentType || contentType,
+          contentLength: size,
+          onProgress: (percent) => setUploadProgress(percent),
+        });
+        setUploadProgress(96);
+        payload.mediaUrl = session.publicUrl;
+        payload.mediaType = 'video';
+      } else {
+        const formData = new FormData();
+        formData.append('media', {
+          uri: video,
+          name: filename,
+          type: contentType,
+        } as any);
+        formData.append('content', description);
+        formData.append('title', 'UBlast Post');
+        formData.append('proposedDate', scheduledDateTime.toISOString());
 
-    // Add scheduling information
-    // formData.append('proposedDate', isScheduled.toString());
-
-
-    formData.append('proposedDate', scheduledDateTime.toISOString());
-    console.log(JSON.stringify(formData, null, 2));
+        if (isEditMode) {
+          updateUBlastPost(
+            { postId: params.postId as string, formData },
+            {
+              onSuccess: () => {
+                resetForm();
+                refetchUBlast();
+                router.back();
+              },
+            }
+          );
+        } else {
+          submitUBlast(formData, {
+            onSuccess: () => {
+              resetForm();
+              refetchUBlast();
+            },
+          });
+        }
+        return;
+      }
+    }
 
     if (isEditMode) {
       updateUBlastPost(
-        { postId: params.postId as string, formData },
+        { postId: params.postId as string, formData: payload },
         {
           onSuccess: () => {
             resetForm();
@@ -261,13 +366,15 @@ const UBlastSubmission = () => {
         }
       );
     } else {
-      submitUBlast(formData, {
+      submitUBlast(payload, {
         onSuccess: () => {
           resetForm();
           refetchUBlast();
         },
       });
     }
+    setUploadProgress(100);
+    setTimeout(() => setUploadProgress(null), 500);
   };
 
   const resetForm = () => {
@@ -278,6 +385,9 @@ const UBlastSubmission = () => {
     setDescription('');
     setIsFacebook(false);
     setIsInstagram(false);
+    setUploadProgress(null);
+    setVideoSize(null);
+    setVideoThumbnailUri(null);
 
     // Reset scheduling states
     setIsScheduled(true);
@@ -327,6 +437,23 @@ const UBlastSubmission = () => {
 
       setVideo(pickedUri);
       setVideoPlayerUri(pickedUri);
+      const info: any = await FileSystem.getInfoAsync(pickedUri, { size: true } as any);
+      const size = typeof info?.size === 'number' ? info.size : null;
+      setVideoSize(size);
+      if (size && size > BIG_VIDEO_BYTES) {
+        try {
+          const { uri: thumbUri } = await VideoThumbnails.getThumbnailAsync(pickedUri, {
+            time: 1000,
+            quality: 0.5,
+          });
+          setVideoThumbnailUri(thumbUri);
+        } catch (err) {
+          console.log('[ublast] thumbnail error', err);
+          setVideoThumbnailUri(null);
+        }
+      } else {
+        setVideoThumbnailUri(null);
+      }
       setPhoto(null);
       setAudio(null);
     } catch (error) {
@@ -457,6 +584,21 @@ const UBlastSubmission = () => {
                   contentFit='cover'
                   cachePolicy='none'
                 />
+              </View>
+            ) : video && videoSize && videoSize > BIG_VIDEO_BYTES && videoThumbnailUri ? (
+              <View className='w-full h-[300px] justify-center items-center bg-black/10 dark:bg-[#FFFFFF0D] rounded-2xl mb-4 overflow-hidden relative'>
+                <Image
+                  source={{ uri: videoThumbnailUri }}
+                  style={{ width: '100%', height: '100%' }}
+                  contentFit='cover'
+                  cachePolicy='none'
+                />
+              </View>
+            ) : video && videoSize && videoSize > BIG_VIDEO_BYTES ? (
+              <View className='w-full h-[300px] justify-center items-center bg-black/10 dark:bg-[#FFFFFF0D] rounded-2xl mb-4 overflow-hidden relative'>
+                <Text className='text-black dark:text-white text-sm'>
+                  Large video selected (preview disabled).
+                </Text>
               </View>
             ) : (
               <MediaPreview
@@ -604,6 +746,11 @@ const UBlastSubmission = () => {
                         : tx(7, 'Submit to UBlast')}
               </Text>
             </TouchableOpacity>
+            {uploadProgress !== null && (
+              <Text className='text-black/70 dark:text-white/70 text-sm mt-2'>
+                Uploading... {uploadProgress}%
+              </Text>
+            )}
           </View>
 
           {/* UBlast Posts List */}

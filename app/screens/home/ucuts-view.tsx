@@ -17,6 +17,7 @@ import UserAvatar from '@/components/ui/UserAvatar';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { toProxyMediaUrl } from '@/lib/mediaProxy';
 import {
   Dimensions,
   FlatList,
@@ -99,14 +100,33 @@ const StoryItem = ({
 
   const uiTexts = (index: number, fallback: string) =>
     translatedUI?.translations?.[index] || fallback;
+  const storyMediaUrl = toProxyMediaUrl(item.storyImage);
+  const previewUrl = React.useMemo(() => {
+    const raw =
+      item?.previewImage || item?.thumbnailUrl || item?.previewUrl || '';
+    const proxy = toProxyMediaUrl(String(raw || ''));
+    return proxy || String(raw || '');
+  }, [item]);
   const player = useVideoPlayer(
-    item.mediaType === 'video' ? item.storyImage : '',
+    item.mediaType === 'video' ? storyMediaUrl : '',
     mediaTypePlayer => {
       if (item.mediaType === 'video') {
         mediaTypePlayer.loop = true;
       }
     }
   );
+
+  useEffect(() => {
+    if (!__DEV__) return;
+    if (!isStoryActive) return;
+    console.log('[video][ucuts]', {
+      id: item?.id,
+      mediaType: item?.mediaType,
+      storyMediaUrl,
+      previewUrl,
+      isStoryActive,
+    });
+  }, [isStoryActive, item?.id, item?.mediaType, storyMediaUrl, previewUrl]);
   useEffect(() => {
     if (item.mediaType !== 'video') return;
     if (isVisible && isFocused) {
@@ -168,7 +188,7 @@ const StoryItem = ({
   };
 
   const openInstagramStoryShare = async () => {
-    const mediaUrl = String(item.storyImage || '');
+    const mediaUrl = String(storyMediaUrl || '');
     const mediaType = String(item.mediaType || '').toLowerCase();
     const appId = process.env.EXPO_PUBLIC_FACEBOOK_APP_ID || '';
     const isHttpMedia = /^https?:\/\//i.test(mediaUrl);
@@ -205,7 +225,7 @@ const StoryItem = ({
   };
 
   const openFacebookStoryShare = async () => {
-    const mediaUrl = String(item.storyImage || '');
+    const mediaUrl = String(storyMediaUrl || '');
     const mediaType = String(item.mediaType || '').toLowerCase();
     const appId = process.env.EXPO_PUBLIC_FACEBOOK_APP_ID || '';
     const isHttpMedia = /^https?:\/\//i.test(mediaUrl);
@@ -282,14 +302,29 @@ const StoryItem = ({
   return (
     <View style={{ width, height }} className='bg-black'>
       {item.mediaType === 'video' ? (
-        <VideoView
-          style={{ width, height, position: 'absolute' }}
-          player={player}
-          contentFit='contain'
-        />
+        isStoryActive ? (
+          <VideoView
+            style={{ width, height, position: 'absolute' }}
+            player={player}
+            contentFit='contain'
+          />
+        ) : previewUrl ? (
+          <Image
+            source={{ uri: previewUrl }}
+            style={{ width, height, position: 'absolute' }}
+            contentFit='contain'
+          />
+        ) : (
+          <View
+            style={{ width, height, position: 'absolute' }}
+            className='items-center justify-center bg-black'
+          >
+            <Ionicons name='play' size={40} color='white' />
+          </View>
+        )
       ) : (
         <Image
-          source={{ uri: item.storyImage }}
+          source={{ uri: storyMediaUrl || item.storyImage }}
           style={{ width, height, position: 'absolute' }}
           contentFit='contain'
         />

@@ -3,6 +3,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import React from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { toProxyMediaUrl } from '@/lib/mediaProxy';
 
 type UserAvatarProps = {
   uri?: string | null;
@@ -27,6 +28,7 @@ const UserAvatar = ({
   const isLight = mode === 'light';
   const fallbackBg = backgroundColor || (isLight ? '#E5E7EB' : '#374151');
   const iconColor = isLight ? '#6B7280' : '#D1D5DB';
+  const resolvedUri = toProxyMediaUrl(uri || '');
 
   return (
     <View
@@ -44,10 +46,10 @@ const UserAvatar = ({
     >
       {isLoading ? (
         <ActivityIndicator size='small' color={isLight ? '#111827' : '#FFFFFF'} />
-      ) : uri ? (
+      ) : resolvedUri ? (
         <Image
-          key={uri}
-          source={{ uri }}
+          key={resolvedUri}
+          source={{ uri: resolvedUri }}
           style={{ width: '100%', height: '100%' }}
           contentFit='cover'
         />

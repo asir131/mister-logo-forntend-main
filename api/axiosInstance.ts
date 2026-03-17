@@ -6,7 +6,7 @@ import { router } from 'expo-router';
 import Toast from 'react-native-toast-message';
 
 const API_BASE_URL =
-  'https://marlene-unlarcenous-nonmunicipally.ngrok-free.dev';
+  'https://ungustatory-erringly-ralph.ngrok-free.dev';
 
 export const SOCIAL_AUTH_BASE_URL = API_BASE_URL;
 

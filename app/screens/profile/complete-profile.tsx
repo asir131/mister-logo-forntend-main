@@ -8,6 +8,7 @@ import {
 } from '@/hooks/app/accounts';
 import { useCompleteProfile, useGetMyProfile } from '@/hooks/app/profile';
 import { useTranslateTexts } from '@/hooks/app/translate';
+import { toProxyMediaUrl } from '@/lib/mediaProxy';
 import Feather from '@expo/vector-icons/Feather';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Image } from 'expo-image';
@@ -397,7 +398,7 @@ const CompleteProfile = () => {
                 <TouchableOpacity onPress={pickImage}>
                   {profileImage ? (
                     <Image
-                      source={{ uri: profileImage }}
+                      source={{ uri: toProxyMediaUrl(profileImage) }}
                       style={{ width: 100, height: 100, borderRadius: 100 }}
                       contentFit='cover'
                     />

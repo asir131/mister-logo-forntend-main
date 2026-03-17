@@ -9,6 +9,7 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import React, { useCallback, useMemo } from 'react';
 import { FlatList, Text, TouchableOpacity, View } from 'react-native';
+import { toProxyMediaUrl } from '@/lib/mediaProxy';
 
 export interface Story {
   id: string;
@@ -26,15 +27,18 @@ const StoryCard = ({
   story: Story;
   createLabel: string;
 }) => {
+  const storyImageUrl = toProxyMediaUrl(story.storyImage || '');
+  const avatarUrl = toProxyMediaUrl(story.avatar || '');
+
   if (story.isMe) {
     return (
       <TouchableOpacity
         onPress={() => router.push('/screens/home/create-ucuts')}
         className='w-28 h-40 mr-3 rounded-2xl overflow-hidden bg-[#F0F2F5] dark:bg-[#FFFFFF0D] border border-black/20 dark:border-[#FFFFFF0D]'
       >
-        {story.storyImage ? (
+        {storyImageUrl ? (
           <Image
-            source={story.storyImage}
+            source={{ uri: storyImageUrl }}
             style={{ width: '100%', height: '70%' }}
             contentFit='cover'
           />
@@ -45,7 +49,7 @@ const StoryCard = ({
         )}
         <View className='absolute left-2 top-2'>
           <UserAvatar
-            uri={story.avatar || null}
+            uri={avatarUrl || null}
             isLoading={Boolean(story.isLoading)}
             size={32}
             borderWidth={2}
@@ -76,9 +80,9 @@ const StoryCard = ({
       }
       className='w-28 h-40 mr-3 rounded-2xl overflow-hidden bg-[#F0F2F5] dark:bg-[#FFFFFF0D] border border-black/20 dark:border-[#FFFFFF0D]'
     >
-      {story.storyImage ? (
+      {storyImageUrl ? (
         <Image
-          source={story.storyImage}
+          source={{ uri: storyImageUrl }}
           style={{ width: '100%', height: '100%', position: 'absolute' }}
           contentFit='cover'
         />
@@ -91,7 +95,7 @@ const StoryCard = ({
 
       <View className='p-2'>
         <UserAvatar
-          uri={story.avatar || null}
+          uri={avatarUrl || null}
           size={32}
           borderWidth={2}
           borderColor='#FFFFFF'

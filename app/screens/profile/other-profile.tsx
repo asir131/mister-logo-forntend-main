@@ -16,6 +16,7 @@ import * as Linking from 'expo-linking';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useEffect, useMemo, useState } from 'react';
+import { toProxyMediaUrl } from '@/lib/mediaProxy';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -47,7 +48,11 @@ const toPlayableVideoUrl = (rawUrl?: string | null) => {
 };
 
 const getGridMediaUrl = (item: any) =>
-  String(item?.mediaUrl || item?.url || item?.videoUrl || '');
+  toProxyMediaUrl(String(item?.mediaUrl || item?.url || item?.videoUrl || ''));
+const getGridPreviewUrl = (item: any) =>
+  toProxyMediaUrl(
+    String(item?.mediaPreviewUrl || item?.thumbnailUrl || item?.previewUrl || '')
+  );
 
 const getGridItemId = (item: any) =>
   String(item?.postId || item?._id || item?.id || getGridMediaUrl(item));
@@ -55,9 +60,11 @@ const getGridItemId = (item: any) =>
 const VideoGridItem = ({
   uri,
   isActive,
+  previewUri,
 }: {
   uri: string;
   isActive: boolean;
+  previewUri?: string;
 }) => {
   const playbackUrl = React.useMemo(() => toPlayableVideoUrl(uri), [uri]);
   const player = useVideoPlayer(playbackUrl, player => {
@@ -73,6 +80,23 @@ const VideoGridItem = ({
     }
     player.play();
   }, [player, playbackUrl, isActive]);
+
+  if (!isActive) {
+    if (previewUri) {
+      return (
+        <Image
+          source={{ uri: previewUri }}
+          style={{ width: '100%', height: '100%' }}
+          contentFit='cover'
+        />
+      );
+    }
+    return (
+      <View className='items-center justify-center w-full h-full bg-black/10 dark:bg-white/5'>
+        <Feather name='video' size={24} color='white' />
+      </View>
+    );
+  }
 
   return (
     <VideoView
@@ -556,7 +580,7 @@ const OtherProfile = () => {
                   >
                     {selectedType === 'photo' && (
                       <Image
-                        source={{ uri: item.mediaUrl }}
+                        source={{ uri: toProxyMediaUrl(item.mediaUrl) }}
                         style={{
                           width: '100%',
                           height: 130,
@@ -578,6 +602,7 @@ const OtherProfile = () => {
                           >
                             <VideoGridItem
                               uri={getGridMediaUrl(item)}
+                              previewUri={getGridPreviewUrl(item)}
                               isActive={activeVideoPostId === getGridItemId(item)}
                             />
                             <View

@@ -15,12 +15,14 @@ import { useGetMyProfile } from '@/hooks/app/profile';
 import useLanguageStore from '@/store/language.store';
 import useThemeStore from '@/store/theme.store';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { Image } from 'expo-image';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as ExpoLinking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useMemo, useState } from 'react';
+import { toProxyMediaUrl } from '@/lib/mediaProxy';
 import {
   Dimensions,
   FlatList,
@@ -141,14 +143,34 @@ const UclipItem = ({ item, isVisible }: { item: UclipPost; isVisible: boolean })
   const uiTexts = (index: number, fallback: string) =>
     translatedUI?.translations?.[index] || fallback;
 
-  const playbackUrl = React.useMemo(
-    () => toPlayableUclipUrl(item.mediaUrl),
-    [item.mediaUrl]
-  );
+  const playbackUrl = React.useMemo(() => {
+    const proxyUrl = toProxyMediaUrl(item.mediaUrl);
+    return toPlayableUclipUrl(proxyUrl);
+  }, [item.mediaUrl]);
+  const previewUrl = React.useMemo(() => {
+    const raw =
+      (item as any)?.mediaPreviewUrl ||
+      (item as any)?.thumbnailUrl ||
+      (item as any)?.posterUrl ||
+      '';
+    const proxy = toProxyMediaUrl(String(raw || ''));
+    return proxy || String(raw || '');
+  }, [item]);
 
   const player = useVideoPlayer(playbackUrl, p => {
     p.loop = true;
   });
+
+  React.useEffect(() => {
+    if (!__DEV__) return;
+    if (!isVisible) return;
+    console.log('[video][uclips]', {
+      id: item?._id,
+      playbackUrl,
+      previewUrl,
+      isVisible,
+    });
+  }, [isVisible, item?._id, playbackUrl, previewUrl]);
 
   React.useEffect(() => {
     if (!isVisible) {
@@ -189,7 +211,7 @@ const UclipItem = ({ item, isVisible }: { item: UclipPost; isVisible: boolean })
 
   const buildSharePayload = () => {
     const description = item?.description?.trim() || '';
-    const mediaUrl = item?.mediaUrl?.trim() || '';
+    const mediaUrl = toProxyMediaUrl(item?.mediaUrl?.trim() || '');
     const publicShareUrl = buildPublicShareUrl();
     const deepLink = buildPostDeepLink();
     const shareUrl = deepLink || publicShareUrl;
@@ -595,12 +617,27 @@ const UclipItem = ({ item, isVisible }: { item: UclipPost; isVisible: boolean })
 
   return (
     <View style={{ height, width }} className='relative overflow-hidden'>
-      <VideoView
-        player={player}
-        style={{ width: '100%', height: '100%', position: 'absolute' }}
-        nativeControls={false}
-        contentFit='cover'
-      />
+      {isVisible ? (
+        <VideoView
+          player={player}
+          style={{ width: '100%', height: '100%', position: 'absolute' }}
+          nativeControls={false}
+          contentFit='cover'
+        />
+      ) : previewUrl ? (
+        <Image
+          source={{ uri: previewUrl }}
+          style={{ width: '100%', height: '100%', position: 'absolute' }}
+          contentFit='cover'
+        />
+      ) : (
+        <View
+          style={{ width: '100%', height: '100%', position: 'absolute' }}
+          className='items-center justify-center bg-black/40'
+        >
+          <Ionicons name='play' size={28} color='white' />
+        </View>
+      )}
 
       <View className='absolute inset-0 bg-black/20 z-10' />
       <View className='absolute top-20 right-6 z-30'>

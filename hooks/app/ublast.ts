@@ -32,13 +32,18 @@ export const useGetUblastEligibility = (options?: { enabled?: boolean }) => {
 export const useSubmitUBlast = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (formData: FormData) => {
-      console.log(JSON.stringify(formData, null, 2));
+    mutationFn: async (payload: FormData | Record<string, any>) => {
+      const isFormData =
+        payload &&
+        typeof payload === 'object' &&
+        typeof (payload as any).append === 'function';
 
-      const res = await api.post('/api/ublasts/submissions', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+      const res = await api.post('/api/ublasts/submissions', payload, {
+        headers: isFormData
+          ? {
+              'Content-Type': 'multipart/form-data',
+            }
+          : undefined,
       });
       return res;
     },
@@ -103,11 +108,22 @@ export const useUpdateUBlastPost = () => {
       formData,
     }: {
       postId: string;
-      formData: FormData;
+      formData: FormData | Record<string, any>;
     }) => {
+      const isFormData =
+        formData &&
+        typeof formData === 'object' &&
+        typeof (formData as any).append === 'function';
       const res = await api.patch(
         `/api/ublasts/submissions/${postId}`,
-        formData
+        formData,
+        {
+          headers: isFormData
+            ? {
+                'Content-Type': 'multipart/form-data',
+              }
+            : undefined,
+        }
       );
       return res;
     },

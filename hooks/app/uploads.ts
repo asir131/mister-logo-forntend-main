@@ -1,4 +1,5 @@
 import api from '@/api/axiosInstance';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useMutation } from '@tanstack/react-query';
 
 export type SignatureResponse = {
@@ -9,6 +10,9 @@ export type SignatureResponse = {
   folder: string;
   resourceType: string;
   publicId: string | null;
+  provider?: 'cloudinary' | 'gcs';
+  uploadUrl?: string;
+  publicUrl?: string;
 };
 
 export type CloudinaryUploadResponse = {
@@ -22,11 +26,25 @@ export type CloudinaryUploadResponse = {
 };
 
 type SignaturePayload = { folder: string; resourceType: string };
+type ResumablePayload = {
+  folder?: string;
+  fileName?: string | null;
+  contentType?: string | null;
+};
 type VideoUploadPayload = {
   signature: SignatureResponse;
   uri: string;
   fileName?: string | null;
   onProgress?: (percent: number) => void;
+};
+
+export type ResumableSessionResponse = {
+  provider: 'gcs';
+  uploadUrl: string;
+  publicUrl: string;
+  objectName: string;
+  bucket: string;
+  contentType: string;
 };
 
 export const useUploadSignature = () => {
@@ -42,9 +60,85 @@ export const useUploadSignature = () => {
         folder: String(data?.folder || ''),
         resourceType: String(data?.resourceType || ''),
         publicId: data?.publicId ? String(data.publicId) : null,
+        provider: data?.provider,
+        uploadUrl: data?.uploadUrl,
+        publicUrl: data?.publicUrl,
       };
     },
   });
+};
+
+export const useCreateResumableUpload = () => {
+  return useMutation<ResumableSessionResponse, Error, ResumablePayload>({
+    mutationFn: async (payload) => {
+      const res: any = await api.post('/api/uploads/resumable', payload);
+      const data = res?.data || res;
+      return {
+        provider: 'gcs',
+        uploadUrl: String(data?.uploadUrl || ''),
+        publicUrl: String(data?.publicUrl || ''),
+        objectName: String(data?.objectName || ''),
+        bucket: String(data?.bucket || ''),
+        contentType: String(data?.contentType || payload.contentType || 'application/octet-stream'),
+      };
+    },
+  });
+};
+
+export const uploadFileToResumableSession = async ({
+  uploadUrl,
+  fileUri,
+  contentType,
+  contentLength,
+  onProgress,
+}: {
+  uploadUrl: string;
+  fileUri: string;
+  contentType?: string;
+  contentLength?: number | null;
+  onProgress?: (percent: number) => void;
+}) => {
+  const headers: Record<string, string> = {
+    'Content-Type': contentType || 'application/octet-stream',
+  };
+  if (contentLength && contentLength > 0) {
+    headers['Content-Length'] = String(contentLength);
+    headers['Content-Range'] = `bytes 0-${contentLength - 1}/${contentLength}`;
+  }
+
+  try {
+    const uploadTask = FileSystem.createUploadTask(
+      uploadUrl,
+      fileUri,
+      {
+        httpMethod: 'PUT',
+        headers,
+        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+      },
+      ({ totalBytesSent, totalBytesExpectedToSend }) => {
+        if (!onProgress || !totalBytesExpectedToSend) return;
+        const raw = Math.round((totalBytesSent / totalBytesExpectedToSend) * 100);
+        onProgress(Math.max(0, Math.min(100, raw)));
+      }
+    );
+    const result = await uploadTask.uploadAsync();
+    if (result.status < 200 || result.status >= 300) {
+      throw new Error(`Resumable upload failed (${result.status})`);
+    }
+    return result;
+  } catch (err) {
+    // Fallback to simpler upload if task API fails
+    const result = await FileSystem.uploadAsync(uploadUrl, fileUri, {
+      httpMethod: 'PUT',
+      headers,
+      uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+    });
+    if (result.status < 200 || result.status >= 300) {
+      throw new Error(`Resumable upload failed (${result.status})`);
+    }
+    if (onProgress) onProgress(100);
+    return result;
+  }
 };
 
 export const useUploadVideoToCloudinary = () => {
