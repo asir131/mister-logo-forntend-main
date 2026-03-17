@@ -192,7 +192,7 @@ const PostCard = ({
   const shouldUsePreview = post?.mediaType === 'video' && preferPreview;
   const hasVideoPreview =
     post?.mediaType === 'video' &&
-    (shouldUsePreview ? Boolean(effectivePreviewUrl) : true);
+    (shouldUsePreview ? Boolean(effectivePreviewUrl || displayMediaUrl) : true);
   const mediaPlaybackUrl = shouldUsePlayer
     ? post?.mediaType === 'video'
       ? toPlayableVideoUrl(

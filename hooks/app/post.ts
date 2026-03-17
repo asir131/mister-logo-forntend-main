@@ -37,6 +37,7 @@ export const useCreatePost = () => {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['posts'] });
+      queryClient.invalidateQueries({ queryKey: ['uclips'] });
       Toast.show({
         type: 'success',
         text1: 'Post Created',
@@ -69,6 +70,7 @@ export const useCreatePostByUrl = () => {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['posts'] });
+      queryClient.invalidateQueries({ queryKey: ['uclips'] });
       Toast.show({
         type: 'success',
         text1: 'Post Created',

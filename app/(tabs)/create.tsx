@@ -478,29 +478,18 @@ const CreatePost = () => {
             videoPlayerUri || sourceUri,
             videoSize
           );
-          if (!effectiveVideoSize || effectiveVideoSize > BIG_VIDEO_BYTES) {
-            const mediaUrl = await uploadVideoResumable({
-              uri: sourceUri,
-              fileName,
-              contentType: mimeType,
-              size: effectiveVideoSize,
-              folder: 'unap/ucuts',
-            });
-            await createUcut({
-              text: description.trim(),
-              mediaUrl,
-              mediaType: 'video',
-            });
-          } else {
-            await createUcut({
-              text: description.trim(),
-              media: {
-                uri: sourceUri,
-                name: fileName,
-                type: mimeType,
-              },
-            });
-          }
+          const mediaUrl = await uploadVideoResumable({
+            uri: sourceUri,
+            fileName,
+            contentType: mimeType,
+            size: effectiveVideoSize,
+            folder: 'unap/ucuts',
+          });
+          await createUcut({
+            text: description.trim(),
+            mediaUrl,
+            mediaType: 'video',
+          });
         } else {
           await createUcut({
             text: description.trim(),
@@ -552,9 +541,7 @@ const CreatePost = () => {
         videoSize
       );
 
-      const shouldTryResumable =
-        !isEditMode &&
-        (effectiveVideoSize === null || effectiveVideoSize > BIG_VIDEO_BYTES);
+      const shouldTryResumable = !isEditMode;
 
       if (shouldTryResumable) {
         try {

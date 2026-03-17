@@ -585,7 +585,7 @@ const Profiles = () => {
                         key={post?._id ? String(post._id) : `profile-all-${index}`}
                         activeOpacity={0.9}
                         onPress={() => {
-                          if (String(post?.mediaType || '') === 'video' && post?.mediaPreviewUrl) {
+                          if (String(post?.mediaType || '') === 'video') {
                             setActiveVideoPostId(String(post._id || ''));
                             if (__DEV__) {
                               console.log('[video][profile] active-from-tap', {
@@ -603,7 +603,7 @@ const Profiles = () => {
                           videoLayoutRef.current[id] = {
                             y: y + videoListOffsetRef.current,
                             height,
-                            hasPreview: Boolean(post?.mediaPreviewUrl),
+                            hasPreview: Boolean(post?.mediaPreviewUrl || post?.mediaUrl),
                           };
                           if (__DEV__) {
                             console.log('[video][profile] layout', {
@@ -614,15 +614,16 @@ const Profiles = () => {
                           }
                         }}
                       >
-                        <PostCard
-                          post={post}
-                          currentUserId={user?.id}
-                          className='mb-4'
-                          showOwnerActions={true}
-                          isVisible={
-                            String(post?._id || '') ===
-                            (activeVideoPostId || firstAllVideoId)
-                          }
+                          <PostCard
+                            post={post}
+                            currentUserId={user?.id}
+                            className='mb-4'
+                            showOwnerActions={true}
+                            preferPreview={false}
+                            isVisible={
+                              String(post?._id || '') ===
+                              (activeVideoPostId || firstAllVideoId)
+                            }
                           isActiveVideo={
                             String(post?._id || '') === (activeVideoPostId || firstAllVideoId)
                           }
@@ -643,7 +644,6 @@ const Profiles = () => {
                         key={post?._id ? String(post._id) : `profile-video-${index}`}
                         activeOpacity={0.9}
                         onPress={() => {
-                          if (!post?.mediaPreviewUrl) return;
                           setActiveVideoPostId(String(post._id || ''));
                         }}
                         onPressIn={() => {
@@ -662,7 +662,7 @@ const Profiles = () => {
                           videoLayoutRef.current[id] = {
                             y: y + videoListOffsetRef.current,
                             height,
-                            hasPreview: Boolean(post?.mediaPreviewUrl),
+                            hasPreview: Boolean(post?.mediaPreviewUrl || post?.mediaUrl),
                           };
                           if (__DEV__) {
                             console.log('[video][profile] layout', {
@@ -673,15 +673,16 @@ const Profiles = () => {
                           }
                         }}
                       >
-                        <PostCard
-                          post={post}
-                          currentUserId={user?.id}
-                          className='mb-4'
-                          showOwnerActions={true}
-                          isVisible={
-                            String(post?._id || '') ===
-                            (activeVideoPostId || firstFeedVideoId)
-                          }
+                          <PostCard
+                            post={post}
+                            currentUserId={user?.id}
+                            className='mb-4'
+                            showOwnerActions={true}
+                            preferPreview={false}
+                            isVisible={
+                              String(post?._id || '') ===
+                              (activeVideoPostId || firstFeedVideoId)
+                            }
                           isActiveVideo={
                             String(post?._id || '') === (activeVideoPostId || firstFeedVideoId)
                           }

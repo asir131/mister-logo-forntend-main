@@ -299,7 +299,7 @@ const UBlastSubmission = () => {
       const contentType = `video/${ext === 'mov' ? 'quicktime' : 'mp4'}`;
       const info: any = await FileSystem.getInfoAsync(video, { size: true } as any);
       const size = typeof info?.size === 'number' ? info.size : null;
-      if (!size || size > BIG_VIDEO_BYTES) {
+      try {
         const session = await requestResumableSession({
           folder: 'unap/ublast-submissions',
           fileName: filename,
@@ -320,7 +320,8 @@ const UBlastSubmission = () => {
         setUploadProgress(96);
         payload.mediaUrl = session.publicUrl;
         payload.mediaType = 'video';
-      } else {
+      } catch (err) {
+        // Fallback to backend upload if resumable fails
         const formData = new FormData();
         formData.append('media', {
           uri: video,
